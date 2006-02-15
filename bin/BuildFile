@@ -1,0 +1,6 @@
+<bin name=EDMFastMerge file=EDMFastMerge.cpp,FastMerge.cc>
+ <use name=boost>
+ <lib name=boost_program_options-gcc-mt> 
+ <use name=rootcore>
+ <use name=DataFormats/Common>
+</bin>
