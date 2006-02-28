@@ -1,6 +1,10 @@
 <bin name=EDMFastMerge file=EDMFastMerge.cpp,FastMerge.cc>
  <use name=boost>
  <lib name=boost_program_options-gcc-mt> 
+ <lib name=Cintex> 
  <use name=rootcore>
  <use name=DataFormats/Common>
+ <use name=FWCore/Utilities>
+ <use name=POOLCore>
+ <use name=uuid>
 </bin>

@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: cmsRun.cpp,v 1.7 2005/12/07 22:05:47 paterno Exp $
+$Id: EDMFastMerge.cpp,v 1.1 2006/02/15 02:01:24 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -15,11 +15,15 @@ $Id: cmsRun.cpp,v 1.7 2005/12/07 22:05:47 paterno Exp $
 #include <vector>
 #include <boost/program_options.hpp>
 #include "IOPool/Common/bin/FastMerge.h"
+#include "Cintex/Cintex.h"
+#include "FWCore/Utilities/interface/Exception.h"
 
 
 // -----------------------------------------------
 
 int main(int argc, char* argv[]) {
+
+  std::string const kProgramName = argv[0];
 
   boost::program_options::options_description desc("Allowed options");
   desc.add_options()
@@ -57,14 +61,30 @@ int main(int argc, char* argv[]) {
 
   std::string out = vm["out"].as<std::string>(); 
 
-/*
-  for(std::vector<std::string>::const_iterator it = in.begin(); it != in.end(); ++it) {
-    std::cout << "input " << *it << ".\n";
+  int rc = 0;
+  try {
+    ROOT::Cintex::Cintex::Enable();
+    edm::FastMerge(in, out);
+  }
+  catch (seal::Error& e) {
+    std::cout << "Exception caught in "
+                                << kProgramName
+                                << "\n"
+                                << e.explainSelf();
+    rc = 1;
+  }
+  catch (std::exception& e) {
+    std::cout << "Standard library exception caught in "
+                                << kProgramName
+                                << "\n"
+                                << e.what();
+    rc = 1;
+  }
+  catch (...) {
+    std::cout << "Unknown exception caught in "
+                                << kProgramName;
+    rc = 2;
   }
 
-  std::cout << "output " << out << ".\n";
-*/
-
-  edm::FastMerge(in, out);
-  return 0;
+  return rc;
 }
