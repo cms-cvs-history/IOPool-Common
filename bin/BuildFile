@@ -1,4 +1,4 @@
-<bin name=EDMFastMerge file=EDMFastMerge.cpp,FastMerge.cc>
+<bin name=EdmFastMerge file=EdmFastMerge.cpp,FastMerge.cc>
  <use name=boost>
  <lib name=boost_program_options-gcc-mt> 
  <lib name=Cintex> 
@@ -7,4 +7,5 @@
  <use name=FWCore/Utilities>
  <use name=POOLCore>
  <use name=uuid>
+ <lib name=TreePlayer> 
 </bin>

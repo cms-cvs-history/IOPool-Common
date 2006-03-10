@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EDMFastMerge.cpp,v 1.1 2006/02/15 02:01:24 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.2 2006/02/28 19:29:57 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
