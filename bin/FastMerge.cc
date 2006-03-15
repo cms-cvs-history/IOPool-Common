@@ -89,6 +89,7 @@ namespace edm {
       typedef vstring::const_iterator const_iterator;
 
       TTree *meta = 0;
+      TTree *psets = 0;
       TTree *params = 0;
       TTree *shapes = 0;
       TTree *links = 0;
@@ -106,6 +107,7 @@ namespace edm {
 
         TTree *meta_ = static_cast<TTree *>(file->Get(poolNames::metaDataTreeName().c_str()));
         assert(meta_);
+        TTree *psets_ = static_cast<TTree *>(file->Get(poolNames::parameterSetTreeName().c_str()));
         TTree *params_ = static_cast<TTree *>(file->Get("##Params"));
         assert(params_);
         TTree *shapes_ = static_cast<TTree *>(file->Get("##Shapes"));
@@ -115,6 +117,7 @@ namespace edm {
         
         if (iter == filesIn.begin()) {
           meta = meta_;
+          psets = psets_;
           params = params_;
           shapes = shapes_;
           links = links_;
@@ -131,6 +134,7 @@ namespace edm {
       TFile *out = TFile::Open(fileOut.c_str(), "recreate", fileOut.c_str());
 
       TTree *newMeta = meta->CloneTree(-1, "fast");
+      TTree *newPsets = psets->CloneTree(-1, "fast");
       TTree *newShapes = shapes->CloneTree(-1, "fast");
       TTree *newLinks = links->CloneTree(-1, "fast");
 
@@ -162,10 +166,10 @@ namespace edm {
 	newParams->Fill();
         memset(pr1, sizeof(pr1), '\0');
       }
-      newParams->AutoSave();
 
       newMeta->Write();
-      newParams->Write();
+      newPsets->Write();
+      newParams->AutoSave();
       newShapes->Write();
       newLinks->Write();
       events.Merge(out, 32000, "fast");
