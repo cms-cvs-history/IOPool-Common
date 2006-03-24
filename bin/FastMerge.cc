@@ -7,6 +7,7 @@
 
 #include "TChain.h"
 #include "TError.h"
+#include "TFile.h"
 
 #include <string>
 
