@@ -5,8 +5,8 @@
 #include <string>
 
 namespace edm {
-//  class PoolCatalog;
- // void FastMerge(PoolCatalog & catalog, std::vector<std::string> const& filesIn, std::string const& fileOut);
+//  class FileCatalog;
+ // void FastMerge(InputFileCatalog & catalog, std::vector<std::string> const& filesIn, std::string const& fileOut);
   void FastMerge(std::vector<std::string> const& filesIn, std::string const& fileOut);
 }
 
