@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.2 2006/02/28 19:29:57 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.1 2006/03/10 23:21:53 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -65,6 +65,13 @@ int main(int argc, char* argv[]) {
   try {
     ROOT::Cintex::Cintex::Enable();
     edm::FastMerge(in, out);
+  }
+  catch (cms::Exception& e) {
+    std::cout << "cms::Exception caught in "
+                                << kProgramName
+                                << "\n"
+                                << e.explainSelf();
+    rc = 1;
   }
   catch (seal::Error& e) {
     std::cout << "Exception caught in "
