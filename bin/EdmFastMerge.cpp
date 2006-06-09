@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.1 2006/03/10 23:21:53 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.2 2006/05/01 16:50:13 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -17,7 +17,12 @@ $Id: EdmFastMerge.cpp,v 1.1 2006/03/10 23:21:53 wmtan Exp $
 #include "IOPool/Common/bin/FastMerge.h"
 #include "Cintex/Cintex.h"
 #include "FWCore/Utilities/interface/Exception.h"
-
+#include "FWCore/Utilities/interface/ProblemTracker.h"
+#include "FWCore/Utilities/interface/Presence.h"
+#include "FWCore/Utilities/interface/PresenceFactory.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/MakeParameterSets.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
 
 // -----------------------------------------------
 
@@ -64,6 +69,49 @@ int main(int argc, char* argv[]) {
   int rc = 0;
   try {
     ROOT::Cintex::Cintex::Enable();
+
+    // We must initialize the plug-in manager first
+    edm::AssertHandler ah;
+
+    // Load the message service plug-in
+    boost::shared_ptr<edm::Presence> theMessageServicePresence;
+    theMessageServicePresence = boost::shared_ptr<edm::Presence>(edm::PresenceFactory::get()->
+      makePresence("MessageServicePresence").release());
+
+    std::string config =
+      "process x = {"
+	"service = MessageLogger {"
+	  "untracked vstring destinations = {'cout','cerr'}"
+	  "untracked PSet cout = {"
+	    "untracked string threshold = 'INFO'"
+	    "untracked PSet default = {untracked int32 limit = 10000000}"
+	    "untracked PSet FwkJob = {untracked int32 limit = 0}"
+	  "}"
+	  "untracked PSet cerr = {"
+	    "untracked string threshold = 'WARNING'"
+	    "untracked PSet default = {untracked int32 limit = 10000000}"
+	  "}"
+	  "untracked vstring fwkJobReports = {'FrameworkJobReport.xml'}"
+	  "untracked vstring categories = {'FwkJob'}"
+	  "untracked PSet FrameworkJobReport.xml = {"
+	    "untracked PSet default = {untracked int32 limit = 0}"
+	    "untracked PSet FwkJob = {untracked int32 limit = 10000000}"
+	  "}"
+	"}"
+	"service = JobReportService{}"
+	"service = SiteLocalConfigService{}"
+      "}";
+
+
+    boost::shared_ptr<std::vector<edm::ParameterSet> > pServiceSets;
+    boost::shared_ptr<edm::ParameterSet>          params_;
+    edm::makeParameterSets(config, params_, pServiceSets);
+
+    //create the services
+    edm::ServiceToken tempToken(edm::ServiceRegistry::createSet(*pServiceSets.get()));
+    //make the services available
+    edm::ServiceRegistry::Operate operate(tempToken);
+
     edm::FastMerge(in, out);
   }
   catch (cms::Exception& e) {

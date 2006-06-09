@@ -1,15 +1,23 @@
 #include "IOPool/Common/bin/FastMerge.h"
-#include "IOPool/Common/interface/PoolNames.h"
-#include "DataFormats/Common/interface/ProductRegistry.h"
-#include "FWCore/Utilities/interface/Exception.h"
-#include "POOLCore/Guid.h"
-#include "uuid/uuid.h"
+
+#include <string>
+#include <iostream>
 
 #include "TChain.h"
 #include "TError.h"
 #include "TFile.h"
+#include "TTree.h"
+#include "TObjArray.h"
+#include "TBranch.h"
 
-#include <string>
+#include "POOLCore/Guid.h"
+
+#include "DataFormats/Common/interface/ProductRegistry.h"
+#include "FWCore/Utilities/interface/Exception.h"
+#include "FWCore/MessageLogger/interface/JobReport.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "IOPool/Common/interface/PoolNames.h"
 
 namespace edm {
   namespace {
@@ -85,7 +93,13 @@ namespace edm {
     
   // ---------------------
   void FastMerge(std::vector<std::string> const& filesIn, std::string const& fileOut) {
+    std::string const empty;
+    std::string const module = "FastMerge";
+
     if (!fileOut.empty()) {
+      Service<JobReport> reportSvc;
+      std::vector<std::string> branchNames; // must be the same for every file.
+
       typedef std::vector<std::string> vstring;
       typedef vstring::const_iterator const_iterator;
 
@@ -103,11 +117,33 @@ namespace edm {
         // std::string pfn;
         // catalog.findFile(pfn, *iter);
         TFile *file = TFile::Open(iter->c_str());
+
         gErrorIgnoreLevel = kInfo;
 	std::string fileName_ = file->GetName();
 
         TTree *meta_ = static_cast<TTree *>(file->Get(poolNames::metaDataTreeName().c_str()));
         assert(meta_);
+
+	if (branchNames.empty()) {
+	  ProductRegistry preg;
+	  ProductRegistry *ppReg = &preg;
+	  meta_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(),(&ppReg));
+	  meta_->GetEntry(0);
+
+	  ProductRegistry::ProductList const& prodList = preg.productList();
+	  for (ProductRegistry::ProductList::const_iterator it = prodList.begin();
+	      it != prodList.end(); ++it) {
+            it->second.init();
+	    branchNames.push_back(it->second.branchName_);
+          }
+        }
+        JobReport::Token inToken = reportSvc->inputFileOpened(*iter,
+               empty, // logicalFileName,
+               empty, // catalog_,
+               module, // moduleName,
+               module, // label,
+               branchNames);
+
         TTree *psets_ = static_cast<TTree *>(file->Get(poolNames::parameterSetTreeName().c_str()));
         TTree *params_ = static_cast<TTree *>(file->Get("##Params"));
         assert(params_);
@@ -130,9 +166,17 @@ namespace edm {
           compare<char>(links, links_, fileName);
         }
         events.Add(iter->c_str());
+        reportSvc->inputFileClosed(inToken);
       }
 
       TFile *out = TFile::Open(fileOut.c_str(), "recreate", fileOut.c_str());
+
+      JobReport::Token outToken = reportSvc->outputFileOpened(fileOut,
+               empty, // logicalFileName,
+               empty, // catalog_,
+               module, // moduleName,
+               module, // label,
+               branchNames);
 
       TTree *newMeta = meta->CloneTree(-1, "fast");
       TTree *newPsets = psets->CloneTree(-1, "fast");
@@ -174,6 +218,7 @@ namespace edm {
       newShapes->Write();
       newLinks->Write();
       events.Merge(out, 32000, "fast");
+      reportSvc->outputFileClosed(outToken);
     }
   }
 }
