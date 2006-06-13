@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.2 2006/05/01 16:50:13 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.3 2006/06/09 23:16:26 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -20,9 +20,7 @@ $Id: EdmFastMerge.cpp,v 1.2 2006/05/01 16:50:13 wmtan Exp $
 #include "FWCore/Utilities/interface/ProblemTracker.h"
 #include "FWCore/Utilities/interface/Presence.h"
 #include "FWCore/Utilities/interface/PresenceFactory.h"
-#include "FWCore/ParameterSet/interface/ParameterSet.h"
-#include "FWCore/ParameterSet/interface/MakeParameterSets.h"
-#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 
 // -----------------------------------------------
 
@@ -79,7 +77,7 @@ int main(int argc, char* argv[]) {
       makePresence("MessageServicePresence").release());
 
     std::string config =
-      "process x = {"
+      "process EdmFastMerge = {"
 	"service = MessageLogger {"
 	  "untracked vstring destinations = {'cout','cerr'}"
 	  "untracked PSet cout = {"
@@ -91,9 +89,9 @@ int main(int argc, char* argv[]) {
 	    "untracked string threshold = 'WARNING'"
 	    "untracked PSet default = {untracked int32 limit = 10000000}"
 	  "}"
-	  "untracked vstring fwkJobReports = {'FrameworkJobReport.xml'}"
+	  "untracked vstring fwkJobReports = {'FrameworkJobReport'}"
 	  "untracked vstring categories = {'FwkJob'}"
-	  "untracked PSet FrameworkJobReport.xml = {"
+	  "untracked PSet FrameworkJobReport = {"
 	    "untracked PSet default = {untracked int32 limit = 0}"
 	    "untracked PSet FwkJob = {untracked int32 limit = 10000000}"
 	  "}"
@@ -102,13 +100,9 @@ int main(int argc, char* argv[]) {
 	"service = SiteLocalConfigService{}"
       "}";
 
-
-    boost::shared_ptr<std::vector<edm::ParameterSet> > pServiceSets;
-    boost::shared_ptr<edm::ParameterSet>          params_;
-    edm::makeParameterSets(config, params_, pServiceSets);
-
     //create the services
-    edm::ServiceToken tempToken(edm::ServiceRegistry::createSet(*pServiceSets.get()));
+    edm::ServiceToken tempToken = edm::ServiceRegistry::createServicesFromConfig(config);
+
     //make the services available
     edm::ServiceRegistry::Operate operate(tempToken);
 
