@@ -134,7 +134,7 @@ namespace edm {
 	  for (ProductRegistry::ProductList::const_iterator it = prodList.begin();
 	      it != prodList.end(); ++it) {
             it->second.init();
-	    branchNames.push_back(it->second.branchName_);
+	    branchNames.push_back(it->second.branchName());
           }
         }
         JobReport::Token inToken = reportSvc->inputFileOpened(*iter,
