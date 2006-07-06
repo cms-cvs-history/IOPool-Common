@@ -104,7 +104,6 @@ namespace edm {
       typedef vstring::const_iterator const_iterator;
 
       TTree *meta = 0;
-      TTree *psets = 0;
       TTree *params = 0;
       TTree *shapes = 0;
       TTree *links = 0;
@@ -112,6 +111,9 @@ namespace edm {
       std::string fileName;
 
       TChain events(poolNames::eventTreeName().c_str());
+      TChain eventsMeta(poolNames::eventMetaDataTreeName().c_str());
+      TChain runs(poolNames::runTreeName().c_str());
+      TChain lumi(poolNames::luminosityBlockTreeName().c_str());
       gErrorIgnoreLevel = kError;
       for (const_iterator iter = filesIn.begin(); iter != filesIn.end(); ++iter) {
         // std::string pfn;
@@ -144,7 +146,6 @@ namespace edm {
                module, // label,
                branchNames);
 
-        TTree *psets_ = static_cast<TTree *>(file->Get(poolNames::parameterSetTreeName().c_str()));
         TTree *params_ = static_cast<TTree *>(file->Get("##Params"));
         assert(params_);
         TTree *shapes_ = static_cast<TTree *>(file->Get("##Shapes"));
@@ -154,7 +155,6 @@ namespace edm {
         
         if (iter == filesIn.begin()) {
           meta = meta_;
-          psets = psets_;
           params = params_;
           shapes = shapes_;
           links = links_;
@@ -166,6 +166,9 @@ namespace edm {
           compare<char>(links, links_, fileName);
         }
         events.Add(iter->c_str());
+        eventsMeta.Add(iter->c_str());
+        runs.Add(iter->c_str());
+        lumi.Add(iter->c_str());
         reportSvc->inputFileClosed(inToken);
       }
 
@@ -179,7 +182,6 @@ namespace edm {
                branchNames);
 
       TTree *newMeta = meta->CloneTree(-1, "fast");
-      TTree *newPsets = psets->CloneTree(-1, "fast");
       TTree *newShapes = shapes->CloneTree(-1, "fast");
       TTree *newLinks = links->CloneTree(-1, "fast");
 
@@ -213,10 +215,12 @@ namespace edm {
       }
 
       newMeta->Write();
-      newPsets->Write();
       newParams->AutoSave();
       newShapes->Write();
       newLinks->Write();
+      runs.Merge(out, 32000, "fast");
+      lumi.Merge(out, 32000, "fast");
+      eventsMeta.Merge(out, 32000, "fast");
       events.Merge(out, 32000, "fast");
       reportSvc->outputFileClosed(outToken);
     }
