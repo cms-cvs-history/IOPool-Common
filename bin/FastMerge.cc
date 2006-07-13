@@ -1,6 +1,5 @@
 #include "IOPool/Common/bin/FastMerge.h"
 
-#include <iostream>
 #include <memory>
 #include <string>
 
@@ -139,30 +138,6 @@ namespace edm
     }
 
     // Helper functions for the comparison of files.
-
-    // Compare two ProductRegistries.
-//     void
-//     compare_ProductRegistry(TTree* lh, TTree* rh, 
-// 			    TBranch* pb1, TBranch* pb2, 
-// 			    int nEntries, std::string const& fileName) 
-//     {
-//       ProductRegistry pr1;
-//       ProductRegistry pr2;
-//       ProductRegistry* ppReg1 = &pr1;
-//       ProductRegistry* ppReg2 = &pr2;
-//       pb1->SetAddress(&ppReg1);
-//       pb2->SetAddress(&ppReg2);
-//       for (int j = 0; j < nEntries; ++j) {
-//         pb1->GetEntry(j);
-//         pb2->GetEntry(j);
-//         if (pr1 != pr2) {
-//           throw cms::Exception("MismatchedInput","FastMerge::compare_ProductRegistry()")
-//             << "File " << fileName << "\nhas different product registry than previous files\n";
-
-//         }
-//       }
-//     }
-
     void
     compare_char(TTree* lh, TTree* rh, 
 		 TBranch* pb1, TBranch* pb2, 
@@ -185,55 +160,58 @@ namespace edm
     }
 
     void
-    compare_for_version1(TTree* t1, TTree* t2,
-			 TBranch* b1, TBranch* b2,
-			 int nEntries, std::string const& filename)
+    compare(TTree* lh, TTree* rh,  
+	    std::string const& fileName)
     {
-      
-    }
-
-    typedef void(compare_function(TTree* , TTree* , 
-                                  TBranch* , TBranch* pb2, 
-                                  int, std::string const&));
-
-    void
-    compare(TTree* lh, TTree* rh, 
-            std::string const& fileName,
-            compare_function* comparator) {
       int nEntries = lh->GetEntries();
-      if (nEntries != rh->GetEntries()) {
-        std::cout << lh->GetName() 
-		  << " # of entries does not match" 
-		  << std::endl;
-        return;
-      }
+      if (nEntries != rh->GetEntries())
+	{
+	  throw cms::Exception("MismatchedInput")
+	    << "Number of entries in TTree: "
+	    << lh->GetName()
+	    << "\nfrom file: "
+	    << fileName
+	    << "\ndoes not match that from the original file\n";
+	}
       int nBranches = lh->GetNbranches();
-      if (nBranches != rh->GetNbranches()) {
-        std::cout << lh->GetName() 
-		  << " # of branches does not match" 
-		  << std::endl;
-        return;
-      }
+      if (nBranches != rh->GetNbranches()) 
+	{
+	  throw cms::Exception("MismatchedInput")
+	    << "Number of branches in TTree: "
+	    << lh->GetName()
+	    << "\nfrom file: "
+	    << fileName
+	    << "\ndoes not match that from the original file\n";
+	}
       TObjArray* ta1 = lh->GetListOfBranches();
       TObjArray* ta2 = rh->GetListOfBranches();
-      for (int i = 0; i < nBranches; ++i) {
-        TBranch* pb1 = static_cast<TBranch*>(ta1->At(i));
-        TBranch* pb2 = static_cast<TBranch*>(ta2->At(i));
-        if (*pb1->GetName() != *pb2->GetName()) {
-          std::cout << pb1->GetName() 
-		    << " name of branch does not match" << std::endl;
-          return;
-        }
-        if (*pb1->GetTitle() != *pb2->GetTitle()) {
-          std::cout << pb1->GetTitle() 
-		    << " title of branch does not match" << std::endl;
-          return;
-        }
-        comparator(lh, rh, pb1, pb2, nEntries, fileName);
-      }
+      for (int i = 0; i < nBranches; ++i) 
+	{
+	  TBranch* pb1 = static_cast<TBranch*>(ta1->At(i));
+	  TBranch* pb2 = static_cast<TBranch*>(ta2->At(i));
+	  if (*pb1->GetName() != *pb2->GetName()) 
+	    {
+	      throw cms::Exception("MismatchedInput")
+		<< "Names of branches in TTree: "
+		<< lh->GetName()
+		<< "\nfrom file: "
+		<< fileName
+		<< "\ndoes not match that from the original file\n";
+	    }
+	  if (*pb1->GetTitle() != *pb2->GetTitle()) 
+	    {
+	      throw cms::Exception("MismatchedInput")
+		<< "Titles of branches in TTree: "
+		<< lh->GetName()
+		<< "\nfrom file: "
+		<< fileName
+		<< "\ndoes not match that from the original file\n";
+	      return;
+	    }
+	  compare_char(lh, rh, pb1, pb2, nEntries, fileName);
+	}
     }
     
-
     void
     getBranchNamesFromRegistry(ProductRegistry& reg,
 			       std::vector<std::string>& names)
@@ -249,9 +227,9 @@ namespace edm
 	}
     }
 
-
     void
-    checkStrictMergeCriteria(ProductRegistry& reg, int fileFormatVersion,
+    checkStrictMergeCriteria(ProductRegistry& reg, 
+			     int fileFormatVersion,
 			     std::string const& filename)
     {
       // This is suitable only for file format version 1.
@@ -282,27 +260,6 @@ namespace edm
 	      << "\nfor branch " << i->first
 	      << "\nand only one is allowed for strict merge\n";
 	}
-    }
-
-
-    std::ostream&
-    operator<< (std::ostream& os, ProcessHistory const& h)
-    {
-      os << h.id() << '\n';
-      typedef ProcessHistory::const_iterator iter;
-      for (iter i=h.begin(),e=h.end(); i!=e; ++i)
-	os << "   " << *i << '\n';
-      return os;
-    }
-
-    template <class M>
-    void
-    dump_map(M const& m, std::ostream& os)
-    {
-      os << "map with : " << m.size() << " entries\n";
-      typedef typename M::const_iterator iter;
-      for (iter i=m.begin(), e=m.end(); i!=e; ++i)
-	os << i->first << "-->" << i->second << '\n';
     }
 
     template <class T>
@@ -435,49 +392,6 @@ namespace edm
     addFilenameToTChain(*lumiData_, firstfile);
     addFilenameToTChain(*eventData_, firstfile);
     addFilenameToTChain(*eventMetaData_, firstfile);
-
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Created ProcessInputFile object with file: " 
-	      << firstfile;
-    std::cerr << "\n----------------------------------\n";
-    
-#if 0
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Read ParameterSetBlob map with: "
-	      << parameterSetBlobs_.size()
-	      << " entries\n";
-    dump_map(parameterSetBlobs_, std::cerr);
-    std::cerr << "\n----------------------------------\n";
-
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Read ProcessHistory map with: "
-	      << processHistories_.size()
-	      << " entries\n";
-    dump_map(processHistories_, std::cerr);
-    std::cerr << "\n----------------------------------\n";
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Read ModuleDescription map with: "
-	      << moduleDescriptions_.size()
-	      << " entries\n";
-    dump_map(moduleDescriptions_, std::cerr);
-    std::cerr << "\n----------------------------------\n";
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "FileFormatVersion: " 
-	      << fileFormatVersion_.value_ << '\n';
-    std::cerr << "\n----------------------------------\n";
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Read ProductRegistry with: "
-	      << firstPreg_.productList().size()
-	      << " entries\n";
-    std::cerr << "NextID is: " << firstPreg_.nextID() << '\n';
-    dump_map(firstPreg_.productList(), std::cerr);
-    std::cerr << "\n----------------------------------\n";
-#endif // #if 0
   }
 
   ProcessInputFile::~ProcessInputFile()
@@ -523,11 +437,6 @@ namespace edm
   void
   ProcessInputFile::operator()(std::string const& fname)
   {
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "called ProcessInputFile::operator() with file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
-
     TFile currentFile(fname.c_str());
 
     if (currentFile.IsZombie() || !currentFile.IsOpen() ) 
@@ -546,16 +455,10 @@ namespace edm
     // These comparison functions throw on failure; we are not
     // neglecting a return value from 'compare'.
     TTree* currentShapes = getTTreeOrThrow(currentFile, "##Shapes");
-    compare(shapes_, currentShapes, fname, compare_char);
+    compare(shapes_, currentShapes, fname);
 
     TTree* currentLinks  = getTTreeOrThrow(currentFile, "##Links");
-    compare(links_, currentLinks, fname, compare_char);
-
-    
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "Pool tree tests passed for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
+    compare(links_, currentLinks, fname);
 
     // --------------------
     // Test MetaData trees
@@ -593,12 +496,6 @@ namespace edm
 	<< " has a ProductRegistry that does not match that"
 	<< " of the first file processed\n";
  
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "ProductRegistry test passed for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
-
-
     // TODO: refactor each of the following "clauses" to its own
     // member function. The previous one *might* need to remain as it
     // is, because of the special need to get the BranchNames before
@@ -617,11 +514,6 @@ namespace edm
 	<< currentFileFormatVersion
 	<< '\n';
 
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "FileFormatVersion test passed for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
-
     std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptions;
     readFromBranch(currentFileMetaData, 
 		   poolNames::moduleDescriptionMapBranchName(),
@@ -633,11 +525,6 @@ namespace edm
 	<< "\nfile " << fname
 	<< " has a ModuleDescriptionMap that does not match that"
 	<< " of the first file processed\n";
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "ModuleDescriptionMap test passed for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
 
     std::map<ProcessHistoryID, ProcessHistory> currentProcessHistories;
     readFromBranch(currentFileMetaData, 
@@ -651,15 +538,6 @@ namespace edm
 	<< "\nfile " << fname
 	<< " has a ProcessHistoryMap that does not match that"
 	<< " of the first file processed\n";
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "ProcessHistoryMap test passed for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
-
-            
-    //     compare(fileMetaData_, currentFileMetaData, fname, 
-    // 	    compare_ProductRegistry);
 
     //-----
     // The new file is now known to be compatible with previously read
@@ -698,12 +576,6 @@ namespace edm
     // FIXME: This can report closure of the file even when
     // closing fails.
     report_->inputFileClosed(inToken);
-
-    std::cerr << "\n----------------------------------\n";
-    std::cerr << "exiting ProcessInputFile::operator() for file: "
-	      << fname;
-    std::cerr << "\n----------------------------------\n";
-
   }
 
   void
@@ -808,9 +680,10 @@ namespace edm
   }
 
     
-  void FastMerge(std::vector<std::string> const& filesIn, 
-                 std::string const& fileOut,
-                 bool be_strict)  
+  void
+  FastMerge(std::vector<std::string> const& filesIn, 
+	    std::string const& fileOut,
+	    bool be_strict)  
   {
 
     if (! be_strict )
@@ -850,4 +723,4 @@ namespace edm
     proc.merge(fileOut);
   }
 
-} //
+}
