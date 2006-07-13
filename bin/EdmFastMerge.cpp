@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.3 2006/06/09 23:16:26 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.4 2006/06/13 22:33:27 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -22,6 +22,7 @@ $Id: EdmFastMerge.cpp,v 1.3 2006/06/09 23:16:26 wmtan Exp $
 #include "FWCore/Utilities/interface/PresenceFactory.h"
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 
+
 // -----------------------------------------------
 
 int main(int argc, char* argv[]) {
@@ -32,7 +33,8 @@ int main(int argc, char* argv[]) {
   desc.add_options()
     ("help,h", "produce help message")
     ("in,i", boost::program_options::value<std::vector<std::string> >(), "input files")
-    ("out,o", boost::program_options::value<std::string>(), "output file");
+    ("out,o", boost::program_options::value<std::string>(), "output file")
+    ("permissive,p", "be permissive about file merging (not yet implemented)");
 
   boost::program_options::positional_options_description p;
   p.add("in", -1);
@@ -42,23 +44,26 @@ int main(int argc, char* argv[]) {
   boost::program_options::store(boost::program_options::command_line_parser(argc, argv).
           options(desc).positional(p).run(), vm);
 
-  // boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
   boost::program_options::notify(vm);    
 
   if (vm.count("help")) {
-    std::cout << desc << "\n";
+    std::cerr << desc << "\n";
     return 1;
   }
 
   if (!vm.count("out")) {
-    std::cout << "output not set.\n";
+    std::cerr << "output not set.\n";
     return 1;
   }
 
   if (!vm.count("in")) {
-    std::cout << "input not set.\n";
+    std::cerr << "input not set.\n";
     return 1;
   }
+
+
+  // Default is 'strict' mode; be permissive only if we're told to be.
+  bool const be_strict = !vm.count("permissive");
 
   std::vector<std::string> in = vm["in"].as<std::vector<std::string> >(); 
 
@@ -106,32 +111,32 @@ int main(int argc, char* argv[]) {
     //make the services available
     edm::ServiceRegistry::Operate operate(tempToken);
 
-    edm::FastMerge(in, out);
+    edm::FastMerge(in, out, be_strict);
   }
   catch (cms::Exception& e) {
     std::cout << "cms::Exception caught in "
-                                << kProgramName
-                                << "\n"
-                                << e.explainSelf();
+	      << kProgramName
+	      << '\n'
+	      << e.explainSelf();
     rc = 1;
   }
   catch (seal::Error& e) {
     std::cout << "Exception caught in "
-                                << kProgramName
-                                << "\n"
-                                << e.explainSelf();
+	      << kProgramName
+	      << '\n'
+	      << e.explainSelf();
     rc = 1;
   }
   catch (std::exception& e) {
     std::cout << "Standard library exception caught in "
-                                << kProgramName
-                                << "\n"
-                                << e.what();
+	      << kProgramName
+	      << '\n'
+	      << e.what();
     rc = 1;
   }
   catch (...) {
     std::cout << "Unknown exception caught in "
-                                << kProgramName;
+	      << kProgramName;
     rc = 2;
   }
 

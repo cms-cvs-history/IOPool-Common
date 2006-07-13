@@ -4,10 +4,11 @@
 #include <vector>
 #include <string>
 
-namespace edm {
-//  class FileCatalog;
- // void FastMerge(InputFileCatalog & catalog, std::vector<std::string> const& filesIn, std::string const& fileOut);
-  void FastMerge(std::vector<std::string> const& filesIn, std::string const& fileOut);
+namespace edm 
+{
+  void FastMerge(std::vector<std::string> const& filesIn, 
+		 std::string const& fileOut,
+		 bool beStrict);
 }
 
 #endif
