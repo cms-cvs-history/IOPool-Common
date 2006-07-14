@@ -400,9 +400,10 @@ namespace edm
     // firstFile_ is controlling.
     fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
 				    0);
-    links_->SetBranchAddress("##Links", 0);
-    shapes_->SetBranchAddress("##Shapes", 0);
-    params_->SetBranchAddress("##Params", 0);
+    std::string const db_string = "db_string";
+    links_->SetBranchAddress(db_string.c_str(), 0);
+    shapes_->SetBranchAddress(db_string.c_str(), 0);
+    params_->SetBranchAddress(db_string.c_str(), 0);
   }
   
 
