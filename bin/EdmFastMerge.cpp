@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.4 2006/06/13 22:33:27 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.5 2006/07/13 15:20:27 paterno Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -23,28 +23,39 @@ $Id: EdmFastMerge.cpp,v 1.4 2006/06/13 22:33:27 wmtan Exp $
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 
 
+using namespace boost::program_options;
+
 // -----------------------------------------------
 
 int main(int argc, char* argv[]) {
 
   std::string const kProgramName = argv[0];
 
-  boost::program_options::options_description desc("Allowed options");
+  options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
-    ("in,i", boost::program_options::value<std::vector<std::string> >(), "input files")
-    ("out,o", boost::program_options::value<std::string>(), "output file")
+    ("in,i", value<std::vector<std::string> >(), "input files")
+    ("out,o", value<std::string>(), "output file")
     ("permissive,p", "be permissive about file merging (not yet implemented)");
 
-  boost::program_options::positional_options_description p;
+  positional_options_description p;
   p.add("in", -1);
 
-  boost::program_options::variables_map vm;
+  variables_map vm;
 
-  boost::program_options::store(boost::program_options::command_line_parser(argc, argv).
-          options(desc).positional(p).run(), vm);
+  try
+    {
+      store(command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+    }
+  catch (boost::program_options::error const& x)
+    {
+      std::cerr << "Option parsing failure:\n"
+		<< x.what() << '\n'
+		<< "Try 'EdmFastMerge -h' for help.\n";
+      return 1;
+    }
 
-  boost::program_options::notify(vm);    
+  notify(vm);    
 
   if (vm.count("help")) {
     std::cerr << desc << "\n";
