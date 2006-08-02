@@ -230,13 +230,18 @@ namespace edm
     void
     checkStrictMergeCriteria(ProductRegistry& reg, 
 			     int fileFormatVersion,
-			     std::string const& filename)
+			     std::string const& filename,
+			     BranchDescription::MatchMode matchMode)
     {
+     
+
       // This is suitable only for file format version 1.
       if ( fileFormatVersion != 1 )
 	throw cms::Exception("MismatchedInput")
 	  << "This version of checkStrictMergeCriteria"
 	  << " only supports file version 1\n";
+
+      if (matchMode == BranchDescription::Permissive) return;
 
       // We require exactly one 'ProcessConfigurationID' and one
       // 'ParameterSetID' for each branch in the file.
@@ -304,7 +309,7 @@ namespace edm
   class ProcessInputFile
   {
   public:
-    explicit ProcessInputFile(std::string const& firstfile);
+    ProcessInputFile(std::string const& firstfile, BranchDescription::MatchMode matchMode);
     ~ProcessInputFile();
     void operator()(std::string const& fname);
     void merge(std::string const& outfilename);
@@ -329,6 +334,7 @@ namespace edm
     std::auto_ptr<TChain> eventMetaData_;
     std::auto_ptr<TChain> lumiData_;
     std::auto_ptr<TChain> runData_;
+    BranchDescription::MatchMode matchMode_;
 
     ProductRegistry          firstPreg_;
     std::vector<std::string> branchNames_;
@@ -347,7 +353,7 @@ namespace edm
     ProcessInputFile& operator=(ProcessInputFile const&);
   };		 
 
-  ProcessInputFile::ProcessInputFile(std::string const& firstfile) :
+  ProcessInputFile::ProcessInputFile(std::string const& firstfile, BranchDescription::MatchMode matchMode) :
     report_(),
     firstFile_(openTFileOrThrow(firstfile)),
     params_(getTTreeOrThrow(*firstFile_, "##Params")),
@@ -358,6 +364,7 @@ namespace edm
     eventMetaData_(makeTChainOrThrow(poolNames::eventMetaDataTreeName())),
     lumiData_(makeTChainOrThrow(poolNames::luminosityBlockTreeName())),
     runData_(makeTChainOrThrow(poolNames::runTreeName())),
+    matchMode_(matchMode),
     firstPreg_(),
     branchNames_(),
     fileFormatVersion_(),
@@ -385,7 +392,7 @@ namespace edm
 
     getBranchNamesFromRegistry(firstPreg_, branchNames_);
 
-    checkStrictMergeCriteria(firstPreg_, getFileFormatVersion(), firstfile);
+    checkStrictMergeCriteria(firstPreg_, getFileFormatVersion(), firstfile, matchMode_);
 
 
     addFilenameToTChain(*runData_, firstfile);
@@ -490,7 +497,7 @@ namespace edm
     // We delay any testing of compatibility until after we have
     // reported opening the new file.
 
-    if (currentProductRegistry != firstPreg_)
+    if (!firstPreg_.merge(currentProductRegistry, matchMode_))
       throw cms::Exception("MismatchedInput")
 	<< "ProductRegistry mismatch:"
 	<< "\nfile " << fname
@@ -520,25 +527,14 @@ namespace edm
 		   poolNames::moduleDescriptionMapBranchName(),
 		   0, "ModuleDescriptionMap", fname, 
 		   currentModuleDescriptions);
-    if (currentModuleDescriptions != moduleDescriptions_)
-      throw cms::Exception("MismatchedInput")
-	<< "ModuleDescriptionMap mismatch:"
-	<< "\nfile " << fname
-	<< " has a ModuleDescriptionMap that does not match that"
-	<< " of the first file processed\n";
+    moduleDescriptions_.insert(currentModuleDescriptions.begin(), currentModuleDescriptions.end());
 
     std::map<ProcessHistoryID, ProcessHistory> currentProcessHistories;
     readFromBranch(currentFileMetaData, 
 		   poolNames::processHistoryMapBranchName(),
 		   0, "ProcessHistoryMap", fname, 
 		   currentProcessHistories);
-
-    if (currentProcessHistories != processHistories_)
-      throw cms::Exception("MismatchedInput")
-	<< "ProcessHistoryMap mismatch:"
-	<< "\nfile " << fname
-	<< " has a ProcessHistoryMap that does not match that"
-	<< " of the first file processed\n";
+    processHistories_.insert(currentProcessHistories.begin(), currentProcessHistories.end());
 
     //-----
     // The new file is now known to be compatible with previously read
@@ -611,8 +607,19 @@ namespace edm
     TTree* newShapes = shapesTree()->CloneTree(-1, "fast");
     newShapes->Write();
 
-    TTree* newLinks  = linksTree()->CloneTree(-1, "fast");
-    newLinks->Write();
+    // There are mysterious problems with cloning the entries of the ##Links tree.
+    // So, we copy the entries by hand.
+    TTree* newLinks  = linksTree()->CloneTree(0);
+    Long64_t mentries = linksTree()->GetEntries();
+    char pr0[1024];
+    memset(pr0, sizeof(pr0), '\0');
+    linksTree()->SetBranchAddress("db_string", pr0);
+    for (Long64_t j = 0; j < mentries; ++j) {
+	linksTree()->GetEntry(j);
+	newLinks->Fill();
+        memset(pr0, sizeof(pr0), '\0');
+    }
+    newLinks->AutoSave();
 
     TTree* newParams = paramsTree()->CloneTree(0);
     Long64_t nentries = paramsTree()->GetEntries();
@@ -621,8 +628,7 @@ namespace edm
     char pr1[1024];
     memset(pr1, sizeof(pr1), '\0');
     paramsTree()->SetBranchAddress("db_string", pr1);
-    for (Long64_t i = 0; i < nentries; ++i) 
-      {
+    for (Long64_t i = 0; i < nentries; ++i) {
 	paramsTree()->GetEntry(i);
 	std::string entry = pr1;
 	std::string::size_type idxFID = entry.find(fid);
@@ -634,16 +640,15 @@ namespace edm
 	  strcpy(pr1, entry.c_str());
 	}
 	std::string::size_type idxPFN = entry.find(pfn);
-	if (idxPFN != std::string::npos) 
-	  {
+	if (idxPFN != std::string::npos) {
 	    idxPFN += pfn.size();
 	    entry = pfn + outfilename + "]";
 	    memset(pr1, sizeof(pr1), '\0');
 	    strcpy(pr1, entry.c_str());
-	  }
+	}
 	newParams->Fill();
 	memset(pr1, sizeof(pr1), '\0');
-      }
+    }
     newParams->AutoSave();
 
 
@@ -652,7 +657,24 @@ namespace edm
     // Write out file-level metadata
     //----------
     // I BELIEVE THIS IS NO LONGER THE CORRECT IMPLEMENTATION...
-    TTree* newMeta   = fileMetaDataTree()->CloneTree(-1, "fast");
+    TTree* newMeta   = fileMetaDataTree()->CloneTree(0);
+
+    FileFormatVersion *ffvp = &fileFormatVersion_;
+    newMeta->SetBranchAddress(poolNames::fileFormatVersionBranchName().c_str(), &ffvp);
+
+    std::map<ProcessHistoryID, ProcessHistory> *phmp = &processHistories_;
+    newMeta->SetBranchAddress(poolNames::processHistoryMapBranchName().c_str(), &phmp);
+
+    std::map<ModuleDescriptionID, ModuleDescription> *mdmp = &moduleDescriptions_;
+    newMeta->SetBranchAddress(poolNames::moduleDescriptionMapBranchName().c_str(), &mdmp);
+
+    ProductRegistry *pregp = &firstPreg_;
+    newMeta->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), &pregp);
+
+    std::map<ParameterSetID, ParameterSetBlob> *psetp = &parameterSetBlobs_;
+    newMeta->SetBranchAddress(poolNames::parameterSetMapBranchName().c_str(), &psetp);
+
+    newMeta->Fill();
     newMeta->Write();
 
     //----------
@@ -687,10 +709,6 @@ namespace edm
 	    bool be_strict)  
   {
 
-    if (! be_strict )
-      throw cms::Exception("NotYetImplemented")
-	<< "permissive mode is not yet implemented\n";
-
     if (fileOut.empty()) 
       throw cms::Exception("BadArgument")
 	<< "no output file specified\n";
@@ -712,11 +730,9 @@ namespace edm
 
     std::vector<std::string> branchNames;
 
-    // Eventually, we will call a constructor of ProcessInputFile
-    // that tells it what strategy to use for comparison. Now, only
-    // 'strict' mode is supported.
+    BranchDescription::MatchMode matchMode = (be_strict ? BranchDescription::Strict : BranchDescription::Permissive);
     typedef std::vector<std::string>::const_iterator iter;
-    ProcessInputFile proc(*filesIn.begin());
+    ProcessInputFile proc(*filesIn.begin(), matchMode);
 
     // We don't use for_each, because we don't want our functor to be
     // copied.

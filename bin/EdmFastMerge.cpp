@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.5 2006/07/13 15:20:27 paterno Exp $
+$Id: EdmFastMerge.cpp,v 1.6 2006/08/01 22:01:57 paterno Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     ("help,h", "produce help message")
     ("in,i", value<std::vector<std::string> >(), "input files")
     ("out,o", value<std::string>(), "output file")
-    ("permissive,p", "be permissive about file merging (not yet implemented)");
+    ("strict,s", "be strict about file merging)");
 
   positional_options_description p;
   p.add("in", -1);
@@ -73,8 +73,8 @@ int main(int argc, char* argv[]) {
   }
 
 
-  // Default is 'strict' mode; be permissive only if we're told to be.
-  bool const be_strict = !vm.count("permissive");
+  // Default is 'permissive' mode; be strict only if we're told to be.
+  bool const be_strict = vm.count("strict");
 
   std::vector<std::string> in = vm["in"].as<std::vector<std::string> >(); 
 
