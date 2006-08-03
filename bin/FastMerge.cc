@@ -10,14 +10,14 @@
 #include "TObjArray.h"
 #include "TBranch.h"
 
-#include "POOLCore/Guid.h"
-
 #include "DataFormats/Common/interface/ProductRegistry.h"
 #include "DataFormats/Common/interface/ParameterSetBlob.h"
 #include "DataFormats/Common/interface/ProcessHistory.h"
 #include "DataFormats/Common/interface/FileFormatVersion.h"
-#include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "DataFormats/Common/interface/ModuleDescription.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/Framework/interface/FileCatalog.h"
+#include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
@@ -312,7 +312,7 @@ namespace edm
     ProcessInputFile(std::string const& firstfile, BranchDescription::MatchMode matchMode);
     ~ProcessInputFile();
     void operator()(std::string const& fname);
-    void merge(std::string const& outfilename);
+    void merge(std::string const& outfilename, pool::FileCatalog::FileID const& fid);
     TTree* paramsTree() { return params_; }
     TTree* shapesTree() { return shapes_; }
     TTree* linksTree() { return links_; }
@@ -576,7 +576,7 @@ namespace edm
   }
 
   void
-  ProcessInputFile::merge(std::string const& outfilename)
+  ProcessInputFile::merge(std::string const& outfilename, pool::FileCatalog::FileID const& fid)
   {
     // We are careful to open the file just before calling
     // merge_chains, because we must not allow alteration of ROOT's
@@ -623,26 +623,24 @@ namespace edm
 
     TTree* newParams = paramsTree()->CloneTree(0);
     Long64_t nentries = paramsTree()->GetEntries();
-    std::string const fid("[NAME=FID][VALUE=");
-    std::string const pfn("[NAME=PFN][VALUE=");
+    std::string const fidPrefix("[NAME=FID][VALUE=");
+    std::string const pfnPrefix("[NAME=PFN][VALUE=");
     char pr1[1024];
     memset(pr1, sizeof(pr1), '\0');
     paramsTree()->SetBranchAddress("db_string", pr1);
     for (Long64_t i = 0; i < nentries; ++i) {
 	paramsTree()->GetEntry(i);
 	std::string entry = pr1;
-	std::string::size_type idxFID = entry.find(fid);
+	std::string::size_type idxFID = entry.find(fidPrefix);
 	if (idxFID != std::string::npos) {
-	  pool::Guid guid;
-	  pool::Guid::create(guid); 
-	  entry = fid + guid.toString() + "]";
+	  entry = fidPrefix + fid + "]";
 	  memset(pr1, sizeof(pr1), '\0');
 	  strcpy(pr1, entry.c_str());
-	}
-	std::string::size_type idxPFN = entry.find(pfn);
+        }
+	std::string::size_type idxPFN = entry.find(pfnPrefix);
 	if (idxPFN != std::string::npos) {
-	    idxPFN += pfn.size();
-	    entry = pfn + outfilename + "]";
+	    idxPFN += pfnPrefix.size();
+	    entry = pfnPrefix + outfilename + "]";
 	    memset(pr1, sizeof(pr1), '\0');
 	    strcpy(pr1, entry.c_str());
 	}
@@ -704,8 +702,11 @@ namespace edm
 
     
   void
-  FastMerge(std::vector<std::string> const& filesIn, 
+  FastMerge(std::vector<std::string> const& logicalFilesIn, 
 	    std::string const& fileOut,
+	    std::string const& catalogIn,
+	    std::string const& catalogOut,
+	    std::string const& lfnOut,
 	    bool be_strict)  
   {
 
@@ -713,11 +714,11 @@ namespace edm
       throw cms::Exception("BadArgument")
 	<< "no output file specified\n";
 
-    if (filesIn.empty())
+    if (logicalFilesIn.empty())
       throw cms::Exception("BadArgument")
 	<< "no input files specified\n";
 
-    if (filesIn.size() == 1)
+    if (logicalFilesIn.size() == 1)
       throw cms::Exception("BadArgument")
 	<< "only one input specified to merge\n";
 
@@ -731,13 +732,29 @@ namespace edm
     std::vector<std::string> branchNames;
 
     BranchDescription::MatchMode matchMode = (be_strict ? BranchDescription::Strict : BranchDescription::Permissive);
+
+    ParameterSet pset;
+    pset.addUntrackedParameter<std::vector<std::string> >("fileNames", logicalFilesIn);
+    pset.addUntrackedParameter<std::string>("catalog", catalogIn);
+    InputFileCatalog catalog(pset);
+    ParameterSet opset;
+    opset.addUntrackedParameter<std::string>("fileName", fileOut);
+    opset.addUntrackedParameter<std::string>("logicalFileName", lfnOut);
+    opset.addUntrackedParameter<std::string>("catalog", catalogOut);
+    OutputFileCatalog outputCatalog(opset);
+    pool::FileCatalog::FileID fid = outputCatalog.registerFile(fileOut, lfnOut);
+
+    std::vector<std::string> const& filesIn = catalog.fileNames();
+
     typedef std::vector<std::string>::const_iterator iter;
     ProcessInputFile proc(*filesIn.begin(), matchMode);
 
     // We don't use for_each, because we don't want our functor to be
     // copied.
     for (iter i=filesIn.begin()+1, e=filesIn.end(); i!=e; ++i) proc(*i);
-    proc.merge(fileOut);
+    proc.merge(fileOut, fid);
+
+    outputCatalog.commitCatalog();
   }
 
 }

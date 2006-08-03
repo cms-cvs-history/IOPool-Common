@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.6 2006/08/01 22:01:57 paterno Exp $
+$Id: EdmFastMerge.cpp,v 1.7 2006/08/02 02:58:48 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -36,6 +36,9 @@ int main(int argc, char* argv[]) {
     ("help,h", "produce help message")
     ("in,i", value<std::vector<std::string> >(), "input files")
     ("out,o", value<std::string>(), "output file")
+    ("logical,l", value<std::string>(), "logical name for output file")
+    ("catalog,c", value<std::string>(), "input catalog")
+    ("outputcatalog", value<std::string>(), "output catalog")
     ("strict,s", "be strict about file merging)");
 
   positional_options_description p;
@@ -80,6 +83,12 @@ int main(int argc, char* argv[]) {
 
   std::string out = vm["out"].as<std::string>(); 
 
+  std::string catalog = (vm.count("catalog") ? vm["catalog"].as<std::string>() : std::string()); 
+
+  std::string outputCatalog = (vm.count("outputcatalog") ? vm["outputcatalog"].as<std::string>() : std::string()); 
+
+  std::string lfn = (vm.count("logical") ? vm["logical"].as<std::string>() : std::string()); 
+
   int rc = 0;
   try {
     ROOT::Cintex::Cintex::Enable();
@@ -122,7 +131,7 @@ int main(int argc, char* argv[]) {
     //make the services available
     edm::ServiceRegistry::Operate operate(tempToken);
 
-    edm::FastMerge(in, out, be_strict);
+    edm::FastMerge(in, out, catalog, outputCatalog, lfn, be_strict);
   }
   catch (cms::Exception& e) {
     std::cout << "cms::Exception caught in "
