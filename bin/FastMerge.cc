@@ -60,7 +60,7 @@ namespace edm
     std::auto_ptr<TFile>
     openTFileOrThrow(std::string const& filename)
     {
-      std::auto_ptr<TFile> result(new TFile(filename.c_str()));
+      std::auto_ptr<TFile> result(TFile::Open(filename.c_str()));
       if ( result->IsZombie() )
 	throw cms::Exception("RootFailure")
 	  << "Unable to create a TFile for input file: " 
