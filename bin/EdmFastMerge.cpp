@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.7 2006/08/02 02:58:48 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.8 2006/08/03 23:04:35 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     ("out,o", value<std::string>(), "output file")
     ("logical,l", value<std::string>(), "logical name for output file")
     ("catalog,c", value<std::string>(), "input catalog")
-    ("outputcatalog", value<std::string>(), "output catalog")
+    ("writecatalog,w", value<std::string>(), "output catalog")
     ("strict,s", "be strict about file merging)");
 
   positional_options_description p;
