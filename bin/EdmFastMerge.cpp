@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.8 2006/08/03 23:04:35 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.9 2006/08/11 18:03:08 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
   std::string catalog = (vm.count("catalog") ? vm["catalog"].as<std::string>() : std::string()); 
 
-  std::string outputCatalog = (vm.count("outputcatalog") ? vm["outputcatalog"].as<std::string>() : std::string()); 
+  std::string outputCatalog = (vm.count("writecatalog") ? vm["writecatalog"].as<std::string>() : std::string()); 
 
   std::string lfn = (vm.count("logical") ? vm["logical"].as<std::string>() : std::string()); 
 
