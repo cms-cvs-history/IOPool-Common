@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.4 2006/06/13 22:33:27 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.9 2006/08/11 18:03:08 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -23,28 +23,42 @@ $Id: EdmFastMerge.cpp,v 1.4 2006/06/13 22:33:27 wmtan Exp $
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 
 
+using namespace boost::program_options;
+
 // -----------------------------------------------
 
 int main(int argc, char* argv[]) {
 
   std::string const kProgramName = argv[0];
 
-  boost::program_options::options_description desc("Allowed options");
+  options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
-    ("in,i", boost::program_options::value<std::vector<std::string> >(), "input files")
-    ("out,o", boost::program_options::value<std::string>(), "output file")
+    ("in,i", value<std::vector<std::string> >(), "input files")
+    ("out,o", value<std::string>(), "output file")
+    ("logical,l", value<std::string>(), "logical name for output file")
+    ("catalog,c", value<std::string>(), "input catalog")
+    ("writecatalog,w", value<std::string>(), "output catalog")
     ("permissive,p", "be permissive about file merging (not yet implemented)");
 
-  boost::program_options::positional_options_description p;
+  positional_options_description p;
   p.add("in", -1);
 
-  boost::program_options::variables_map vm;
+  variables_map vm;
 
-  boost::program_options::store(boost::program_options::command_line_parser(argc, argv).
-          options(desc).positional(p).run(), vm);
+  try
+    {
+      store(command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
+    }
+  catch (boost::program_options::error const& x)
+    {
+      std::cerr << "Option parsing failure:\n"
+		<< x.what() << '\n'
+		<< "Try 'EdmFastMerge -h' for help.\n";
+      return 1;
+    }
 
-  boost::program_options::notify(vm);    
+  notify(vm);    
 
   if (vm.count("help")) {
     std::cerr << desc << "\n";
@@ -62,12 +76,18 @@ int main(int argc, char* argv[]) {
   }
 
 
-  // Default is 'strict' mode; be permissive only if we're told to be.
-  bool const be_strict = !vm.count("permissive");
+  // Default is 'permissive' mode; be strict only if we're told to be.
+  bool const be_strict = vm.count("strict");
 
   std::vector<std::string> in = vm["in"].as<std::vector<std::string> >(); 
 
   std::string out = vm["out"].as<std::string>(); 
+
+  std::string catalog = (vm.count("catalog") ? vm["catalog"].as<std::string>() : std::string()); 
+
+  std::string outputCatalog = (vm.count("writecatalog") ? vm["writecatalog"].as<std::string>() : std::string()); 
+
+  std::string lfn = (vm.count("logical") ? vm["logical"].as<std::string>() : std::string()); 
 
   int rc = 0;
   try {
@@ -111,7 +131,7 @@ int main(int argc, char* argv[]) {
     //make the services available
     edm::ServiceRegistry::Operate operate(tempToken);
 
-    edm::FastMerge(in, out, be_strict);
+    edm::FastMerge(in, out, catalog, outputCatalog, lfn, be_strict);
   }
   catch (cms::Exception& e) {
     std::cout << "cms::Exception caught in "
