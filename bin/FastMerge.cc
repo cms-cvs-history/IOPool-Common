@@ -61,7 +61,7 @@ namespace edm
     openTFileOrThrow(std::string const& filename)
     {
       std::auto_ptr<TFile> result(TFile::Open(filename.c_str()));
-      if ( result->IsZombie() )
+      if (!result.get() || result->IsZombie())
 	throw cms::Exception("RootFailure")
 	  << "Unable to create a TFile for input file: " 
 	  << filename
@@ -440,27 +440,21 @@ namespace edm
   void
   ProcessInputFile::operator()(std::string const& fname)
   {
-    TFile currentFile(fname.c_str());
-
-    if (currentFile.IsZombie() || !currentFile.IsOpen() ) 
-      throw cms::Exception("RootFailure")
-	<< "Unable to create TFile for input file: " 
-	<< fname 
-	<< '\n';
+    std::auto_ptr<TFile> currentFile(openTFileOrThrow(fname));
 
     // --------------------
     // Test Pool trees
     // --------------------
-    TTree* currentParams = getTTreeOrThrow(currentFile, "##Params");
+    TTree* currentParams = getTTreeOrThrow(*currentFile, "##Params");
     // We don't actually test for equality of this tree...
     assert (currentParams); // pretend to use this...
 
     // These comparison functions throw on failure; we are not
     // neglecting a return value from 'compare'.
-    TTree* currentShapes = getTTreeOrThrow(currentFile, "##Shapes");
+    TTree* currentShapes = getTTreeOrThrow(*currentFile, "##Shapes");
     compare(shapes_, currentShapes, fname);
 
-    TTree* currentLinks  = getTTreeOrThrow(currentFile, "##Links");
+    TTree* currentLinks  = getTTreeOrThrow(*currentFile, "##Links");
     compare(links_, currentLinks, fname);
 
     // --------------------
@@ -468,7 +462,7 @@ namespace edm
     // --------------------
 
     TTree* currentFileMetaData = 
-      getTTreeOrThrow(currentFile, poolNames::metaDataTreeName());
+      getTTreeOrThrow(*currentFile, poolNames::metaDataTreeName());
 
 
     ProductRegistry currentProductRegistry;
