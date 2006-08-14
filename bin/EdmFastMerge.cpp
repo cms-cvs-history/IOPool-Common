@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.9 2006/08/11 18:03:08 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.10 2006/08/12 13:42:02 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
     ("logical,l", value<std::string>(), "logical name for output file")
     ("catalog,c", value<std::string>(), "input catalog")
     ("writecatalog,w", value<std::string>(), "output catalog")
+    ("jobreport,j", value<std::string>(), "job report file")
     ("strict,s", "be strict about file merging)");
 
   positional_options_description p;
@@ -113,12 +114,24 @@ int main(int argc, char* argv[]) {
 	  "untracked PSet cerr = {"
 	    "untracked string threshold = 'WARNING'"
 	    "untracked PSet default = {untracked int32 limit = 10000000}"
-	  "}"
-	  "untracked vstring fwkJobReports = {'FrameworkJobReport'}"
+	  "}";
+
+    if (vm.count("jobreport")) {
+      config += " untracked vstring fwkJobReports = {'";
+      config += vm["jobreport"].as<std::string>(); 
+      config += "'}";
+    }
+
+    config +=
 	  "untracked vstring categories = {'FwkJob'}"
 	  "untracked PSet FrameworkJobReport = {"
-	    "untracked PSet default = {untracked int32 limit = 0}"
-	    "untracked PSet FwkJob = {untracked int32 limit = 10000000}"
+	    "untracked PSet default = {untracked int32 limit = 0}";
+
+    config += (vm.count("jobreport") ?
+	    "untracked PSet FwkJob = {untracked int32 limit = 10000000}" :
+	    "untracked PSet FwkJob = {untracked int32 limit = 0}");
+
+    config +=
 	  "}"
 	"}"
 	"service = JobReportService{}"
