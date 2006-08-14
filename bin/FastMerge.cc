@@ -59,9 +59,9 @@ namespace edm
     // a suitable exception. The file is opened in read mode
     // by default, but opening in recreate mode can be requested
     std::auto_ptr<TFile>
-    openTFileOrThrow(std::string const& filename, const bool openInWriteMode = false)
+    openTFileOrThrow(std::string const& filename, bool const openInWriteMode = false)
     {
-      const char* const option = openInWriteMode ? "recreate" : "read";
+      char const* const option = openInWriteMode ? "recreate" : "read";
       std::auto_ptr<TFile> result(TFile::Open(filename.c_str(),option));
       if (!result.get() || result->IsZombie())
 	throw cms::Exception("RootFailure")
@@ -74,7 +74,7 @@ namespace edm
     // Get a TTree of the given name from the already-open TFile, or
     // throw a suitable exception.
     TTree* 
-    getTTreeOrThrow(TFile& file, const char* treename)
+    getTTreeOrThrow(TFile& file, char const* treename)
     {
       TTree* result = dynamic_cast<TTree*>(file.Get(treename));
       if (!result )
@@ -103,7 +103,7 @@ namespace edm
     // return a null pointer. Make sure not to return a non-null
     // pointer to a 'zombie' TTree.
     TTree*
-    getTTree(TFile& file, const char* treename)
+    getTTree(TFile& file, char const* treename)
     {
       TTree* result = dynamic_cast<TTree*>(file.Get(treename));
       return ( result && !result->IsZombie()  )
@@ -311,10 +311,16 @@ namespace edm
   class ProcessInputFile
   {
   public:
-    ProcessInputFile(std::string const& firstfile, BranchDescription::MatchMode matchMode);
+    ProcessInputFile(std::string const& firstfile,
+		     std::string const& logicalFileName,
+		     std::string const& catalogName,
+		     BranchDescription::MatchMode matchMode);
     ~ProcessInputFile();
-    void operator()(std::string const& fname);
-    void merge(std::string const& outfilename, pool::FileCatalog::FileID const& fid);
+    void operator()(std::string const& fname, std::string const& logicalFileName);
+    void merge(std::string const& outfilename,
+	       std::string const& logicalFileName,
+	       std::string const& catalogName,
+	       pool::FileCatalog::FileID const& fid);
     TTree* paramsTree() { return params_; }
     TTree* shapesTree() { return shapes_; }
     TTree* linksTree() { return links_; }
@@ -324,6 +330,7 @@ namespace edm
       return branchNames_; }
 
   private:
+    std::string catalogURL_;
     Service<JobReport>   report_;    
     std::auto_ptr<TFile> firstFile_;
 
@@ -355,7 +362,12 @@ namespace edm
     ProcessInputFile& operator=(ProcessInputFile const&);
   };		 
 
-  ProcessInputFile::ProcessInputFile(std::string const& firstfile, BranchDescription::MatchMode matchMode) :
+  ProcessInputFile::ProcessInputFile(
+	std::string const& firstfile,
+	std::string const& logicalFileName,
+	std::string const& catalogName,
+	BranchDescription::MatchMode matchMode) :
+    catalogURL_(catalogName),
     report_(),
     firstFile_(openTFileOrThrow(firstfile)),
     params_(getTTreeOrThrow(*firstFile_, "##Params")),
@@ -396,15 +408,27 @@ namespace edm
 
     checkStrictMergeCriteria(firstPreg_, getFileFormatVersion(), firstfile, matchMode_);
 
+    // FIXME: This input file open/close should be managed by a sentry
+    // object.
+    JobReport::Token inToken =
+       report_->inputFileOpened(
+       firstfile,      // physical filename
+       (FileCatalog::isPhysical(logicalFileName) ? "" : logicalFileName),// logical filename
+       catalogURL_,    // catalog
+       "FastMerge",    // source class name
+       "EdmFastMerge", // module label
+       branchNames_);
 
     addFilenameToTChain(*runData_, firstfile);
     addFilenameToTChain(*lumiData_, firstfile);
     addFilenameToTChain(*eventData_, firstfile);
     addFilenameToTChain(*eventMetaData_, firstfile);
+    report_->inputFileClosed(inToken);
   }
 
   ProcessInputFile::~ProcessInputFile()
   {
+
     // I think we need to 'shut down' each tree that the TFile
     // firstFile_ is controlling.
     fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
@@ -445,7 +469,7 @@ namespace edm
   //             to be equal in strict mode, so no updating is needed.
 
   void
-  ProcessInputFile::operator()(std::string const& fname)
+  ProcessInputFile::operator()(std::string const& fname, std::string const& logicalFileName)
   {
     std::auto_ptr<TFile> currentFile(openTFileOrThrow(fname));
 
@@ -483,12 +507,13 @@ namespace edm
     // FIXME: This input file open/close should be managed by a sentry
     // object.
     JobReport::Token inToken =
-      report_->inputFileOpened(fname,          // physical filename
-			       "",             // logical filename
-			       "",             // catalog
-			       "FastMerge",    // source class name
-			       "EdmFastMerge", // module label
-			       currentBranchNames);
+      report_->inputFileOpened(
+	    fname,          // physical filename
+            (FileCatalog::isPhysical(logicalFileName) ? "" : logicalFileName),// logical filename
+            catalogURL_,    // catalog
+	    "FastMerge",    // source class name
+	    "EdmFastMerge", // module label
+	    currentBranchNames);
 
     // We delay any testing of compatibility until after we have
     // reported opening the new file.
@@ -572,7 +597,10 @@ namespace edm
   }
 
   void
-  ProcessInputFile::merge(std::string const& outfilename, pool::FileCatalog::FileID const& fid)
+  ProcessInputFile::merge(std::string const& outfilename,
+	       std::string const& logicalFileName,
+	       std::string const& catalogName,
+	       pool::FileCatalog::FileID const& fid)
   {
     // We are careful to open the file just before calling
     // merge_chains, because we must not allow alteration of ROOT's
@@ -586,8 +614,8 @@ namespace edm
     // sentry object.
     JobReport::Token outToken = 
       report_->outputFileOpened(outfilename,    // physical filename
-				"",             // logical filename
-				"",             // catalog
+				logicalFileName,// logical filename
+				catalogName,    // catalog
 				"FastMerge",    // source class name
 				"EdmFastMerge", // module label
 				branchNames_);
@@ -738,12 +766,12 @@ namespace edm
     std::vector<std::string> const& filesIn = catalog.fileNames();
 
     typedef std::vector<std::string>::const_iterator iter;
-    ProcessInputFile proc(*filesIn.begin(), matchMode);
+    ProcessInputFile proc(*filesIn.begin(), *logicalFilesIn.begin(), catalog.url(), matchMode);
 
     // We don't use for_each, because we don't want our functor to be
     // copied.
-    for (iter i=filesIn.begin()+1, e=filesIn.end(); i!=e; ++i) proc(*i);
-    proc.merge(fileOut, fid);
+    for (iter i=filesIn.begin()+1, e=filesIn.end(), j=logicalFilesIn.begin()+1; i != e; ++i, ++j) proc(*i, *j);
+    proc.merge(fileOut, lfnOut, outputCatalog.url(), fid);
 
     outputCatalog.commitCatalog();
   }
