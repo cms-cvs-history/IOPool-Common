@@ -55,12 +55,14 @@ namespace edm
     // objects that are in an unusable (called by Root 'zombie')
     // state, rather than having constructors throw exceptions.
 
-    // Create a TFile in read mode by opening the given file, or
-    // throw a suitable exception.
+    // Create a TFile in by opening the given file, or throw
+    // a suitable exception. The file is opened in read mode
+    // by default, but opening in recreate mode can be requested
     std::auto_ptr<TFile>
-    openTFileOrThrow(std::string const& filename)
+    openTFileOrThrow(std::string const& filename, const bool openInWriteMode = false)
     {
-      std::auto_ptr<TFile> result(TFile::Open(filename.c_str()));
+      const char* const option = openInWriteMode ? "recreate" : "read";
+      std::auto_ptr<TFile> result(TFile::Open(filename.c_str(),option));
       if (!result.get() || result->IsZombie())
 	throw cms::Exception("RootFailure")
 	  << "Unable to create a TFile for input file: " 
@@ -573,12 +575,7 @@ namespace edm
     // output TFile and use of that TFile by the TChain::Merge calls
     // we make in merge_chains. Isn't it delicious?
 
-    TFile out(outfilename.c_str(), "recreate", outfilename.c_str());
-    if (out.IsZombie() )
-      throw cms::Exception("RootFileFailure")
-	<< "untable to create a TFile for output file: "
-	<< outfilename
-	<< '\n';
+    std::auto_ptr<TFile> outFile(openTFileOrThrow(outfilename,true));
 
     // FIXME: This output file open/close should be managed by a
     // sentry object.
@@ -667,7 +664,7 @@ namespace edm
     //----------
     // Merge the chains.
     //----------
-    merge_chains(out);
+    merge_chains(*outFile);
 
     report_->outputFileClosed(outToken);
   }
