@@ -26,19 +26,11 @@
 
 // Notes:
 //
-// In the current version, only *strict mode* merging is supported.
-// Strict mode is intended for use in the production system. In strict
-// mode, the requirement for merging is that the files being merged
-// must have the same processing history.
-//
-// The exact meaning of 'strict mode' depends on the file format version.
+// The exact meaning of 'strict mode' and 'permissive mode' depend on the file format version.
 //
 // Version 0 files are not handled by this version of the program;
 // one must use the FastMerge (in EdmFastMerge) from the older release
 // to merge files from the older release.
-//
-// Permissive merging, possibly of various levels of permissiveness,
-// will be added as needed, at a later date.
 //
 // In the current version, the merging attempt stops when the first
 // file that is not compatible is encountered.
@@ -444,7 +436,7 @@ namespace edm
   // processing are:
 
   //   1. Check the new file for consistency with the original
-  //      file. We operate only in strict mode, so far.
+  //      file.
   //
   //      a. two of the POOL trees must match: ##Links and ##Shapes;
   //         the third POOL tree ##Params is not compared
@@ -465,8 +457,6 @@ namespace edm
   //      b. deal with the POOL trees (???)
   //      c. update the objects stored from the MetaData tree
   //         i.  add any new ParameterSetBlobs to the ParameterSetMap
-  //         ii. all other items from the MetaData tree are required
-  //             to be equal in strict mode, so no updating is needed.
 
   void
   ProcessInputFile::operator()(std::string const& fname, std::string const& logicalFileName)
@@ -673,7 +663,6 @@ namespace edm
     //----------
     // Write out file-level metadata
     //----------
-    // I BELIEVE THIS IS NO LONGER THE CORRECT IMPLEMENTATION...
     TTree* newMeta   = fileMetaDataTree()->CloneTree(0);
 
     FileFormatVersion *ffvp = &fileFormatVersion_;
