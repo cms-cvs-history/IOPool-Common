@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.10 2006/08/12 13:42:02 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.11 2006/08/14 22:58:59 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -40,7 +40,8 @@ int main(int argc, char* argv[]) {
     ("catalog,c", value<std::string>(), "input catalog")
     ("writecatalog,w", value<std::string>(), "output catalog")
     ("jobreport,j", value<std::string>(), "job report file")
-    ("strict,s", "be strict about file merging)");
+    ("strict,s", "be strict about file merging")
+    ("skip,k", "skip missing/unreadable input files");
 
   positional_options_description p;
   p.add("in", -1);
@@ -78,7 +79,9 @@ int main(int argc, char* argv[]) {
 
 
   // Default is 'permissive' mode; be strict only if we're told to be.
-  bool const be_strict = vm.count("strict");
+  bool const beStrict = vm.count("strict");
+
+  bool const skipMissing = vm.count("skip");
 
   std::vector<std::string> in = vm["in"].as<std::vector<std::string> >(); 
 
@@ -144,7 +147,7 @@ int main(int argc, char* argv[]) {
     //make the services available
     edm::ServiceRegistry::Operate operate(tempToken);
 
-    edm::FastMerge(in, out, catalog, outputCatalog, lfn, be_strict);
+    edm::FastMerge(in, out, catalog, outputCatalog, lfn, beStrict, skipMissing);
   }
   catch (cms::Exception& e) {
     std::cout << "cms::Exception caught in "

@@ -11,7 +11,8 @@ namespace edm
 		 std::string const& catalogIn,
 		 std::string const& catalogOut,
 		 std::string const& lfn,
-		 bool beStrict);
+		 bool beStrict,
+		 bool skipMissing);
 }
 
 #endif

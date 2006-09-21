@@ -47,19 +47,32 @@ namespace edm
     // objects that are in an unusable (called by Root 'zombie')
     // state, rather than having constructors throw exceptions.
 
-    // Create a TFile in by opening the given file, or throw
-    // a suitable exception. The file is opened in read mode
-    // by default, but opening in recreate mode can be requested
+    // Create a TFile in by opening the given file,
+    // or throw a suitable exception (unless noThrow is true).
+    // The file is opened in read mode by default,
+    // but opening in recreate mode can be requested
     std::auto_ptr<TFile>
-    openTFileOrThrow(std::string const& filename, bool const openInWriteMode = false)
+    openTFile(std::string const& filename, std::string const& logicalFileName,
+	bool const openInWriteMode = false,
+	bool const noThrow = false)
     {
       char const* const option = openInWriteMode ? "recreate" : "read";
+      if (noThrow) gErrorIgnoreLevel = kBreak;
       std::auto_ptr<TFile> result(TFile::Open(filename.c_str(),option));
-      if (!result.get() || result->IsZombie())
+      if (noThrow) gErrorIgnoreLevel = kError;
+      if (!result.get() || result->IsZombie()) {
+	if (noThrow) return std::auto_ptr<TFile>();
+        if (filename.empty()) {
+          throw cms::Exception("LogicalFileNameNotFound", "FileCatalog::findFile()\n")
+            << "Logical file name " << logicalFileName << " was not found in the file catalog.\n"
+            << "If you wanted a local file, you forgot the 'file:' prefix\n"
+            << "before the file name in your configuration file.\n";
+        }
 	throw cms::Exception("RootFailure")
-	  << "Unable to create a TFile for input file: " 
+	  << "Unable to open file: " 
 	  << filename
 	  << '\n';
+      }
       return result;
     }
 
@@ -303,10 +316,9 @@ namespace edm
   class ProcessInputFile
   {
   public:
-    ProcessInputFile(std::string const& firstfile,
-		     std::string const& logicalFileName,
-		     std::string const& catalogName,
-		     BranchDescription::MatchMode matchMode);
+    ProcessInputFile(std::string const& catalogName,
+		     BranchDescription::MatchMode matchMode,
+		     bool skipMissing);
     ~ProcessInputFile();
     void operator()(std::string const& fname, std::string const& logicalFileName);
     void merge(std::string const& outfilename,
@@ -336,6 +348,7 @@ namespace edm
     std::auto_ptr<TChain> lumiData_;
     std::auto_ptr<TChain> runData_;
     BranchDescription::MatchMode matchMode_;
+    bool skipMissing_;
 
     ProductRegistry          firstPreg_;
     std::vector<std::string> branchNames_;
@@ -355,85 +368,46 @@ namespace edm
   };		 
 
   ProcessInputFile::ProcessInputFile(
-	std::string const& firstfile,
-	std::string const& logicalFileName,
 	std::string const& catalogName,
-	BranchDescription::MatchMode matchMode) :
+	BranchDescription::MatchMode matchMode,
+	bool skipMissing) :
     catalogURL_(catalogName),
     report_(),
-    firstFile_(openTFileOrThrow(firstfile)),
-    params_(getTTreeOrThrow(*firstFile_, "##Params")),
-    shapes_(getTTreeOrThrow(*firstFile_, "##Shapes")),
-    links_(getTTreeOrThrow(*firstFile_, "##Links")),
-    fileMetaData_(getTTreeOrThrow(*firstFile_, poolNames::metaDataTreeName())),
-    eventData_(makeTChainOrThrow(poolNames::eventTreeName())),
-    eventMetaData_(makeTChainOrThrow(poolNames::eventMetaDataTreeName())),
-    lumiData_(makeTChainOrThrow(poolNames::luminosityBlockTreeName())),
-    runData_(makeTChainOrThrow(poolNames::runTreeName())),
+    firstFile_(),
+    params_(),
+    shapes_(),
+    links_(),
+    fileMetaData_(),
+    eventData_(),
+    eventMetaData_(),
+    lumiData_(),
+    runData_(),
     matchMode_(matchMode),
+    skipMissing_(skipMissing),
     firstPreg_(),
     branchNames_(),
     fileFormatVersion_(),
     parameterSetBlobs_(),
     processHistories_(),
     moduleDescriptions_()
-  {
-    readFromBranch(fileMetaData_, poolNames::fileFormatVersionBranchName(),
-		   0, "FileFormatVersion", firstfile, fileFormatVersion_);
-    if (fileFormatVersion_.value_ != 1)
-      throw cms::Exception("MismatchedInput")
-    	<< "This version of FastMerge only supports file version 1\n";
-
-    readFromBranch(fileMetaData_, poolNames::parameterSetMapBranchName(),
-		   0, "ParameterSets", firstfile, parameterSetBlobs_);
-
-    readFromBranch(fileMetaData_, poolNames::processHistoryMapBranchName(),
-		   0, "ProcessHistoryMap", firstfile, processHistories_);
-    
-    readFromBranch(fileMetaData_, poolNames::moduleDescriptionMapBranchName(),
-		   0, "ModuleDescriptionMap", firstfile, moduleDescriptions_);
-
-    readFromBranch(fileMetaData_, poolNames::productDescriptionBranchName(),
-		   0, "ProductRegistry", firstfile, firstPreg_);
-
-    getBranchNamesFromRegistry(firstPreg_, branchNames_);
-
-    checkStrictMergeCriteria(firstPreg_, getFileFormatVersion(), firstfile, matchMode_);
-
-    // FIXME: This input file open/close should be managed by a sentry
-    // object.
-    JobReport::Token inToken =
-       report_->inputFileOpened(
-       firstfile,      // physical filename
-       (FileCatalog::isPhysical(logicalFileName) ? "" : logicalFileName),// logical filename
-       catalogURL_,    // catalog
-       "FastMerge",    // source class name
-       "EdmFastMerge", // module label
-       branchNames_);
-
-    addFilenameToTChain(*runData_, firstfile);
-    addFilenameToTChain(*lumiData_, firstfile);
-    addFilenameToTChain(*eventData_, firstfile);
-    addFilenameToTChain(*eventMetaData_, firstfile);
-    report_->inputFileClosed(inToken);
-  }
+  {}
 
   ProcessInputFile::~ProcessInputFile()
   {
 
     // I think we need to 'shut down' each tree that the TFile
     // firstFile_ is controlling.
-    fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
+    if (fileMetaData_) fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
 				    0);
     std::string const db_string = "db_string";
-    links_->SetBranchAddress(db_string.c_str(), 0);
-    shapes_->SetBranchAddress(db_string.c_str(), 0);
-    params_->SetBranchAddress(db_string.c_str(), 0);
+    if (links_) links_->SetBranchAddress(db_string.c_str(), 0);
+    if (shapes_) shapes_->SetBranchAddress(db_string.c_str(), 0);
+    if (params_) params_->SetBranchAddress(db_string.c_str(), 0);
   }
   
 
-  // This operator is called to process each new file. The steps of
-  // processing are:
+  // This operator is called to process each file. The steps of
+  // processing for all but the first file are:
 
   //   1. Check the new file for consistency with the original
   //      file.
@@ -461,121 +435,153 @@ namespace edm
   void
   ProcessInputFile::operator()(std::string const& fname, std::string const& logicalFileName)
   {
-    std::auto_ptr<TFile> currentFile(openTFileOrThrow(fname));
-
-    // --------------------
-    // Test Pool trees
-    // --------------------
+    std::auto_ptr<TFile> currentFile(openTFile(fname, logicalFileName, false, skipMissing_));
+    if (currentFile.get() == 0) {
+      report_->reportSkippedFile(fname, logicalFileName);
+      return;
+    }
+    bool first = (firstFile_.get() == 0);
+      // --------------------
+      // Test Pool trees
+      // --------------------
     TTree* currentParams = getTTreeOrThrow(*currentFile, "##Params");
-    // We don't actually test for equality of this tree...
-    assert (currentParams); // pretend to use this...
-
-    // These comparison functions throw on failure; we are not
-    // neglecting a return value from 'compare'.
     TTree* currentShapes = getTTreeOrThrow(*currentFile, "##Shapes");
-    compare(shapes_, currentShapes, fname);
-
     TTree* currentLinks  = getTTreeOrThrow(*currentFile, "##Links");
-    compare(links_, currentLinks, fname);
-
-    // --------------------
-    // Test MetaData trees
-    // --------------------
-
+  
+      // --------------------
+      // Test MetaData trees
+      // --------------------
     TTree* currentFileMetaData = 
-      getTTreeOrThrow(*currentFile, poolNames::metaDataTreeName());
+        getTTreeOrThrow(*currentFile, poolNames::metaDataTreeName());
 
-
-    ProductRegistry currentProductRegistry;
+    ProductRegistry currentProductRegistryBuffer;
+    ProductRegistry & currentProductRegistry = (first ? firstPreg_ : currentProductRegistryBuffer);
+    
     readFromBranch(currentFileMetaData, 
-		   poolNames::productDescriptionBranchName(),
-		   0, "ProductRegistry", fname, currentProductRegistry);    
-    std::vector<std::string> currentBranchNames;
+  		   poolNames::productDescriptionBranchName(),
+  		   0, "ProductRegistry", fname, currentProductRegistry);    
+
+    std::vector<std::string> currentBranchNamesBuffer;
+    std::vector<std::string> & currentBranchNames = (first ? branchNames_ : currentBranchNamesBuffer);
     getBranchNamesFromRegistry(currentProductRegistry, currentBranchNames);
-
-
-    // FIXME: This input file open/close should be managed by a sentry
-    // object.
-    JobReport::Token inToken =
-      report_->inputFileOpened(
-	    fname,          // physical filename
-            (FileCatalog::isPhysical(logicalFileName) ? "" : logicalFileName),// logical filename
-            catalogURL_,    // catalog
-	    "FastMerge",    // source class name
-	    "EdmFastMerge", // module label
-	    currentBranchNames);
 
     // We delay any testing of compatibility until after we have
     // reported opening the new file.
-
-    if (!firstPreg_.merge(currentProductRegistry, matchMode_))
-      throw cms::Exception("MismatchedInput")
-	<< "ProductRegistry mismatch:"
-	<< "\nfile " << fname
-	<< " has a ProductRegistry that does not match that"
-	<< " of the first file processed\n";
- 
+  
+    // FIXME: This input file open/close should be managed by a sentry
+    // object.
+    JobReport::Token inToken =
+        report_->inputFileOpened(
+  	    fname,          // physical filename
+              logicalFileName,// logical filename
+              catalogURL_,    // catalog
+  	    "FastMerge",    // source class name
+  	    "EdmFastMerge", // module label
+  	    currentBranchNames);
+  
     // TODO: refactor each of the following "clauses" to its own
     // member function. The previous one *might* need to remain as it
     // is, because of the special need to get the BranchNames before
     // reporting the opening of the file, and reporting the opening of
     // the file before doing the compatibility test.
+  
     FileFormatVersion currentFileFormatVersion;
     readFromBranch(currentFileMetaData,
-		   poolNames::fileFormatVersionBranchName(),
-		   0, "FileFormatVersion", fname, currentFileFormatVersion);
+  		   poolNames::fileFormatVersionBranchName(),
+  		   0, "FileFormatVersion", fname, currentFileFormatVersion);
 
-    if (currentFileFormatVersion != fileFormatVersion_)
-      throw cms::Exception("MismatchedInput")
-	<< "File format mismatch:"
-	<< "\nfirst file is version: " << fileFormatVersion_
-	<< "\nfile " << fname << " is versin: " 
-	<< currentFileFormatVersion
-	<< '\n';
+    if (first) {
+      params_ = currentParams; // We don't actually test for equality of this tree...
+      shapes_ = currentShapes;
+      links_ = currentLinks;
+      fileMetaData_ = currentFileMetaData;
+      fileFormatVersion_ = currentFileFormatVersion;
+      if (fileFormatVersion_.value_ != 1)
+        throw cms::Exception("MismatchedInput")
+    	  << "This version of FastMerge only supports file version 1\n";
 
-    std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptions;
+      eventData_ = (makeTChainOrThrow(poolNames::eventTreeName()));
+      eventMetaData_ = (makeTChainOrThrow(poolNames::eventMetaDataTreeName()));
+      lumiData_ = (makeTChainOrThrow(poolNames::luminosityBlockTreeName()));
+      runData_ = (makeTChainOrThrow(poolNames::runTreeName()));
+
+      checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
+    } else {
+      // These comparison functions throw on failure; we are not
+      // neglecting a return value from 'compare'.
+      compare(shapes_, currentShapes, fname);
+      compare(links_, currentLinks, fname);
+
+      if (!firstPreg_.merge(currentProductRegistry, matchMode_))
+        throw cms::Exception("MismatchedInput")
+  	<< "ProductRegistry mismatch:"
+  	<< "\nfile " << fname
+  	<< " has a ProductRegistry that does not match that"
+  	<< " of the first file processed\n";
+
+      if (currentFileFormatVersion != fileFormatVersion_)
+        throw cms::Exception("MismatchedInput")
+  	<< "File format mismatch:"
+  	<< "\nfirst file is version: " << fileFormatVersion_
+  	<< "\nfile " << fname << " is versin: " 
+  	<< currentFileFormatVersion
+  	<< '\n';
+    }
+
+    std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptionsBuffer;
+    std::map<ModuleDescriptionID, ModuleDescription> & currentModuleDescriptions =
+        (first ? moduleDescriptions_ : currentModuleDescriptionsBuffer);
     readFromBranch(currentFileMetaData, 
-		   poolNames::moduleDescriptionMapBranchName(),
-		   0, "ModuleDescriptionMap", fname, 
-		   currentModuleDescriptions);
-    moduleDescriptions_.insert(currentModuleDescriptions.begin(), currentModuleDescriptions.end());
+  		   poolNames::moduleDescriptionMapBranchName(),
+  		   0, "ModuleDescriptionMap", fname, 
+  		   currentModuleDescriptions);
 
-    std::map<ProcessHistoryID, ProcessHistory> currentProcessHistories;
+    std::map<ProcessHistoryID, ProcessHistory> currentProcessHistoriesBuffer;
+    std::map<ProcessHistoryID, ProcessHistory> & currentProcessHistories =
+        (first ? processHistories_ : currentProcessHistoriesBuffer);
     readFromBranch(currentFileMetaData, 
-		   poolNames::processHistoryMapBranchName(),
-		   0, "ProcessHistoryMap", fname, 
-		   currentProcessHistories);
-    processHistories_.insert(currentProcessHistories.begin(), currentProcessHistories.end());
-
-    //-----
-    // The new file is now known to be compatible with previously read
-    // files. Now we record the information about the new file.
-    //-----
+  		   poolNames::processHistoryMapBranchName(),
+  		   0, "ProcessHistoryMap", fname, 
+  		   currentProcessHistories);
 
     // TODO: Refactor the merging of the ParameterSet map to its own
     // private member function.
-    std::map<ParameterSetID, ParameterSetBlob> currentParameterSetBlobs;
+    std::map<ParameterSetID, ParameterSetBlob> currentParameterSetBlobsBuffer;
+    std::map<ParameterSetID, ParameterSetBlob> & currentParameterSetBlobs =
+        (first ? parameterSetBlobs_ : currentParameterSetBlobsBuffer);
     readFromBranch(currentFileMetaData, 
-		   poolNames::parameterSetMapBranchName(),
-		   0, "ParameterSetMap", fname, 
-		   currentParameterSetBlobs);
+  		   poolNames::parameterSetMapBranchName(),
+  		   0, "ParameterSetMap", fname, 
+  		   currentParameterSetBlobs);
 
-    { // block to limit scope some names ...
-      typedef std::map<ParameterSetID,ParameterSetBlob> map_t;
-      typedef map_t::key_type key_type;
-      typedef map_t::value_type value_type;
-      typedef map_t::const_iterator iter;
-      for (iter i=currentParameterSetBlobs.begin(),
-	     e=currentParameterSetBlobs.end();
-	   i!=e; 
-	   ++i)
-	{
-	  key_type const& thiskey = i->first;
-	  if (parameterSetBlobs_.find(thiskey) == parameterSetBlobs_.end())
-	    parameterSetBlobs_.insert(value_type(thiskey, i->second));
-	}
-    } // end of block
-    
+    if (first) {
+      firstFile_ = currentFile;
+    } else {
+      moduleDescriptions_.insert(currentModuleDescriptions.begin(), currentModuleDescriptions.end());
+  
+      processHistories_.insert(currentProcessHistories.begin(), currentProcessHistories.end());
+  
+      //-----
+      // The new file is now known to be compatible with previously read
+      // files. Now we record the information about the new file.
+      //-----
+  
+      { // block to limit scope some names ...
+        typedef std::map<ParameterSetID,ParameterSetBlob> map_t;
+        typedef map_t::key_type key_type;
+        typedef map_t::value_type value_type;
+        typedef map_t::const_iterator iter;
+        for (iter i=currentParameterSetBlobs.begin(),
+  	     e=currentParameterSetBlobs.end();
+  	   i!=e; 
+  	   ++i)
+  	{
+  	  key_type const& thiskey = i->first;
+  	  if (parameterSetBlobs_.find(thiskey) == parameterSetBlobs_.end())
+  	    parameterSetBlobs_.insert(value_type(thiskey, i->second));
+  	}
+      } // end of block
+    }    
     addFilenameToTChain(*runData_, fname);
     addFilenameToTChain(*lumiData_, fname);
     addFilenameToTChain(*eventData_, fname);
@@ -598,7 +604,7 @@ namespace edm
     // output TFile and use of that TFile by the TChain::Merge calls
     // we make in merge_chains. Isn't it delicious?
 
-    std::auto_ptr<TFile> outFile(openTFileOrThrow(outfilename,true));
+    std::auto_ptr<TFile> outFile(openTFile(outfilename, logicalFileName, true));
 
     // FIXME: This output file open/close should be managed by a
     // sentry object.
@@ -710,23 +716,24 @@ namespace edm
 
     
   void
-  FastMerge(std::vector<std::string> const& logicalFilesIn, 
+  FastMerge(std::vector<std::string> const& filesIn, 
 	    std::string const& fileOut,
 	    std::string const& catalogIn,
 	    std::string const& catalogOut,
 	    std::string const& lfnOut,
-	    bool be_strict)  
+	    bool beStrict,
+	    bool skipMissing)  
   {
 
     if (fileOut.empty()) 
       throw cms::Exception("BadArgument")
 	<< "no output file specified\n";
 
-    if (logicalFilesIn.empty())
+    if (filesIn.empty())
       throw cms::Exception("BadArgument")
 	<< "no input files specified\n";
 
-    if (logicalFilesIn.size() == 1)
+    if (filesIn.size() == 1)
       throw cms::Exception("BadArgument")
 	<< "only one input specified to merge\n";
 
@@ -739,12 +746,12 @@ namespace edm
 
     std::vector<std::string> branchNames;
 
-    BranchDescription::MatchMode matchMode = (be_strict ? BranchDescription::Strict : BranchDescription::Permissive);
+    BranchDescription::MatchMode matchMode = (beStrict ? BranchDescription::Strict : BranchDescription::Permissive);
 
     ParameterSet pset;
-    pset.addUntrackedParameter<std::vector<std::string> >("fileNames", logicalFilesIn);
+    pset.addUntrackedParameter<std::vector<std::string> >("fileNames", filesIn);
     pset.addUntrackedParameter<std::string>("catalog", catalogIn);
-    InputFileCatalog catalog(pset);
+    InputFileCatalog catalog(pset, skipMissing);
     ParameterSet opset;
     opset.addUntrackedParameter<std::string>("fileName", fileOut);
     opset.addUntrackedParameter<std::string>("logicalFileName", lfnOut);
@@ -752,14 +759,14 @@ namespace edm
     OutputFileCatalog outputCatalog(opset);
     pool::FileCatalog::FileID fid = outputCatalog.registerFile(fileOut, lfnOut);
 
-    std::vector<std::string> const& filesIn = catalog.fileNames();
+    std::vector<FileCatalogItem> const& inputFiles = catalog.fileCatalogItems();
 
-    typedef std::vector<std::string>::const_iterator iter;
-    ProcessInputFile proc(*filesIn.begin(), *logicalFilesIn.begin(), catalog.url(), matchMode);
+    typedef std::vector<FileCatalogItem>::const_iterator iter;
+    ProcessInputFile proc(catalog.url(), matchMode, skipMissing);
 
     // We don't use for_each, because we don't want our functor to be
     // copied.
-    for (iter i=filesIn.begin()+1, e=filesIn.end(), j=logicalFilesIn.begin()+1; i != e; ++i, ++j) proc(*i, *j);
+    for (iter i=inputFiles.begin(), e=inputFiles.end(); i != e; ++i) proc(i->fileName(), i->logicalFileName());
     proc.merge(fileOut, lfnOut, outputCatalog.url(), fid);
 
     outputCatalog.commitCatalog();
