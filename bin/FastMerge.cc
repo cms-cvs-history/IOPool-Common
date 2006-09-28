@@ -507,17 +507,12 @@ namespace edm
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
-      // These comparison functions throw on failure; we are not
-      // neglecting a return value from 'compare'.
-      compare(shapes_, currentShapes, fname);
-      compare(links_, currentLinks, fname);
 
-      if (!firstPreg_.merge(currentProductRegistry, matchMode_))
+      std::string mergeInfo = firstPreg_.merge(currentProductRegistry, fname, matchMode_);
+      if (!mergeInfo.empty()) {
         throw cms::Exception("MismatchedInput")
-  	<< "ProductRegistry mismatch:"
-  	<< "\nfile " << fname
-  	<< " has a ProductRegistry that does not match that"
-  	<< " of the first file processed\n";
+	<< mergeInfo;
+      }
 
       if (currentFileFormatVersion != fileFormatVersion_)
         throw cms::Exception("MismatchedInput")
@@ -526,6 +521,11 @@ namespace edm
   	<< "\nfile " << fname << " is versin: " 
   	<< currentFileFormatVersion
   	<< '\n';
+
+      // These comparison functions throw on failure; we are not
+      // neglecting a return value from 'compare'.
+      compare(shapes_, currentShapes, fname);
+      compare(links_, currentLinks, fname);
     }
 
     std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptionsBuffer;
