@@ -473,8 +473,8 @@ namespace edm
     JobReport::Token inToken =
         report_->inputFileOpened(
   	    fname,          // physical filename
-              logicalFileName,// logical filename
-              catalogURL_,    // catalog
+            logicalFileName,// logical filename
+            catalogURL_,    // catalog
   	    "FastMerge",    // source class name
   	    "EdmFastMerge", // module label
   	    currentBranchNames);
@@ -582,13 +582,16 @@ namespace edm
   	}
       } // end of block
     }    
+    int nEventsBefore = eventMetaData_->GetEntries();
     addFilenameToTChain(*runData_, fname);
     addFilenameToTChain(*lumiData_, fname);
     addFilenameToTChain(*eventData_, fname);
     addFilenameToTChain(*eventMetaData_, fname);
+    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
 
     // FIXME: This can report closure of the file even when
     // closing fails.
+    report_->overrideEventsRead(inToken, nEvents);
     report_->inputFileClosed(inToken);
   }
 
@@ -694,6 +697,8 @@ namespace edm
     //----------
     merge_chains(*outFile);
 
+    int nEvents = eventData_->GetEntries();
+    report_->overrideEventsWritten(outToken, nEvents);
     report_->outputFileClosed(outToken);
   }
 
