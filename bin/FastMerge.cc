@@ -733,10 +733,6 @@ namespace edm
       throw cms::Exception("BadArgument")
 	<< "no input files specified\n";
 
-    if (filesIn.size() == 1)
-      throw cms::Exception("BadArgument")
-	<< "only one input specified to merge\n";
-
     std::string const empty;
     std::string const module = "FastMerge";
 
