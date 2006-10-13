@@ -336,6 +336,7 @@ namespace edm
   private:
     std::string catalogURL_;
     Service<JobReport>   report_;    
+    std::vector<JobReport::Token> inTokens_;
     std::auto_ptr<TFile> firstFile_;
 
     TTree* params_;     // not owned
@@ -358,7 +359,7 @@ namespace edm
     std::map<ProcessHistoryID, ProcessHistory>       processHistories_;
     std::map<ModuleDescriptionID, ModuleDescription> moduleDescriptions_;
 
-
+    
     // helpers
     void merge_chains(TFile& outfile);
 
@@ -373,6 +374,7 @@ namespace edm
 	bool skipMissing) :
     catalogURL_(catalogName),
     report_(),
+    inTokens_(),
     firstFile_(),
     params_(),
     shapes_(),
@@ -479,6 +481,8 @@ namespace edm
   	    "EdmFastMerge", // module label
   	    currentBranchNames);
   
+    inTokens_.push_back(inToken);
+
     // TODO: refactor each of the following "clauses" to its own
     // member function. The previous one *might* need to remain as it
     // is, because of the special need to get the BranchNames before
@@ -612,12 +616,14 @@ namespace edm
     // FIXME: This output file open/close should be managed by a
     // sentry object.
     JobReport::Token outToken = 
-      report_->outputFileOpened(outfilename,    // physical filename
-				logicalFileName,// logical filename
-				catalogName,    // catalog
-				"FastMerge",    // source class name
-				"EdmFastMerge", // module label
-				branchNames_);
+      report_->outputFileOpened(
+	outfilename,    // physical filename
+	logicalFileName,// logical filename
+	catalogName,    // catalog
+	"FastMerge",    // source class name
+	"EdmFastMerge", // module label
+	fid,		// File ID (guid)
+	branchNames_);
 
     //----------
     // Handle the POOL trees
@@ -698,6 +704,7 @@ namespace edm
     merge_chains(*outFile);
 
     int nEvents = eventData_->GetEntries();
+    report_->overrideContributingInputs(outToken, inTokens_);
     report_->overrideEventsWritten(outToken, nEvents);
     report_->outputFileClosed(outToken);
   }
