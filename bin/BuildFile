@@ -20,3 +20,16 @@
  <use name=FWCore/ParameterSet>
  <use name=uuid>
 </bin>
+
+<bin name=EdmFileUtil file=EdmFileUtil.cpp,CollUtil.cc>
+ <use name=boost>
+ <use name=boost_program_options>
+ <use name=rootcore>
+ <use name=DataFormats/Common>
+ <use name=FWCore/FWLite>
+ <use name=FWCore/Framework>
+ <use name=FWCore/MessageLogger>
+ <use name=FWCore/ServiceRegistry>
+ <use name=FWCore/ParameterSet>
+ <use name=uuid>
+</bin>
