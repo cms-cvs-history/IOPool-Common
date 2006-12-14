@@ -346,8 +346,8 @@ namespace edm
     TTree*  fileMetaData_;  // not owned
     std::auto_ptr<TChain> eventData_;
     std::auto_ptr<TChain> eventMetaData_;
-    // std::auto_ptr<TChain> lumiData_;
-    // std::auto_ptr<TChain> runData_;
+    std::auto_ptr<TChain> lumiData_;
+    std::auto_ptr<TChain> runData_;
     BranchDescription::MatchMode matchMode_;
     bool skipMissing_;
 
@@ -382,8 +382,8 @@ namespace edm
     fileMetaData_(),
     eventData_(),
     eventMetaData_(),
-    // lumiData_(),
-    // runData_(),
+    lumiData_(),
+    runData_(),
     matchMode_(matchMode),
     skipMissing_(skipMissing),
     firstPreg_(),
@@ -506,8 +506,8 @@ namespace edm
 
       eventData_ = (makeTChainOrThrow(poolNames::eventTreeName()));
       eventMetaData_ = (makeTChainOrThrow(poolNames::eventMetaDataTreeName()));
-      // lumiData_ = (makeTChainOrThrow(poolNames::luminosityBlockTreeName()));
-      // runData_ = (makeTChainOrThrow(poolNames::runTreeName()));
+      lumiData_ = (makeTChainOrThrow(poolNames::luminosityBlockTreeName()));
+      runData_ = (makeTChainOrThrow(poolNames::runTreeName()));
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -587,8 +587,8 @@ namespace edm
       } // end of block
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
-    // addFilenameToTChain(*runData_, fname);
-    // addFilenameToTChain(*lumiData_, fname);
+    addFilenameToTChain(*runData_, fname);
+    addFilenameToTChain(*lumiData_, fname);
     addFilenameToTChain(*eventData_, fname);
     addFilenameToTChain(*eventMetaData_, fname);
     int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
@@ -720,8 +720,8 @@ namespace edm
     // re-creating objects.
     Option_t const* opts("fast,keep");
 
-    // runData_->Merge(&outfile, basketsize, opts);
-    // lumiData_->Merge(&outfile, basketsize, opts);
+    runData_->Merge(&outfile, basketsize, opts);
+    lumiData_->Merge(&outfile, basketsize, opts);
     eventMetaData_->Merge(&outfile, basketsize, opts);
     eventData_->Merge(&outfile, basketsize, opts);
   }
