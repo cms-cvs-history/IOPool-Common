@@ -26,7 +26,7 @@
  <use name=boost_program_options>
  <use name=rootcore>
  <use name=DataFormats/Common>
- <use name=FWCore/FWLite>
+ <use name=FWCore/RootAutoLibraryLoader>
  <use name=FWCore/Framework>
  <use name=FWCore/MessageLogger>
  <use name=FWCore/ServiceRegistry>
