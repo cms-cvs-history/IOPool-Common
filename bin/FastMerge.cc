@@ -15,6 +15,7 @@
 #include "DataFormats/Common/interface/ProcessHistory.h"
 #include "DataFormats/Common/interface/FileFormatVersion.h"
 #include "DataFormats/Common/interface/ModuleDescription.h"
+#include "DataFormats/Common/interface/BranchType.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/FileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
@@ -22,7 +23,6 @@
 #include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
-#include "FWCore/Utilities/interface/PersistentNames.h"
 
 // Notes:
 //
@@ -347,7 +347,9 @@ namespace edm
     std::auto_ptr<TChain> eventData_;
     std::auto_ptr<TChain> eventMetaData_;
     std::auto_ptr<TChain> lumiData_;
+    std::auto_ptr<TChain> lumiMetaData_;
     std::auto_ptr<TChain> runData_;
+    std::auto_ptr<TChain> runMetaData_;
     BranchDescription::MatchMode matchMode_;
     bool skipMissing_;
 
@@ -383,7 +385,9 @@ namespace edm
     eventData_(),
     eventMetaData_(),
     lumiData_(),
+    lumiMetaData_(),
     runData_(),
+    runMetaData_(),
     matchMode_(matchMode),
     skipMissing_(skipMissing),
     firstPreg_(),
@@ -504,10 +508,12 @@ namespace edm
         throw cms::Exception("MismatchedInput")
     	  << "This version of FastMerge only supports file version 1\n";
 
-      eventData_ = (makeTChainOrThrow(poolNames::eventTreeName()));
-      eventMetaData_ = (makeTChainOrThrow(poolNames::eventMetaDataTreeName()));
-      lumiData_ = (makeTChainOrThrow(poolNames::luminosityBlockTreeName()));
-      runData_ = (makeTChainOrThrow(poolNames::runTreeName()));
+      eventData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InEvent)));
+      eventMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent)));
+      lumiData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InLumi)));
+      lumiMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi)));
+      runData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InRun)));
+      runMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun)));
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -588,7 +594,9 @@ namespace edm
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
     addFilenameToTChain(*runData_, fname);
+    addFilenameToTChain(*runMetaData_, fname);
     addFilenameToTChain(*lumiData_, fname);
+    addFilenameToTChain(*lumiMetaData_, fname);
     addFilenameToTChain(*eventData_, fname);
     addFilenameToTChain(*eventMetaData_, fname);
     int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
@@ -720,7 +728,9 @@ namespace edm
     // re-creating objects.
     Option_t const* opts("fast,keep");
 
+    runMetaData_->Merge(&outfile, basketsize, opts);
     runData_->Merge(&outfile, basketsize, opts);
+    lumiMetaData_->Merge(&outfile, basketsize, opts);
     lumiData_->Merge(&outfile, basketsize, opts);
     eventMetaData_->Merge(&outfile, basketsize, opts);
     eventData_->Merge(&outfile, basketsize, opts);
