@@ -243,10 +243,10 @@ namespace edm
      
 
       // This is suitable only for file format version 1.
-      if ( fileFormatVersion != 1 )
+      if ( fileFormatVersion < 1 || fileFormatVersion > 2)
 	throw cms::Exception("MismatchedInput")
 	  << "This version of checkStrictMergeCriteria"
-	  << " only supports file version 1\n";
+	  << " only supports file version 1 or 2\n";
 
       if (matchMode == BranchDescription::Permissive) return;
 
@@ -357,6 +357,7 @@ namespace edm
     std::vector<std::string> branchNames_;
 
     FileFormatVersion                                fileFormatVersion_;
+    bool doLumiAndRun_;
     std::map<ParameterSetID, ParameterSetBlob>       parameterSetBlobs_;
     std::map<ProcessHistoryID, ProcessHistory>       processHistories_;
     std::map<ModuleDescriptionID, ModuleDescription> moduleDescriptions_;
@@ -393,6 +394,7 @@ namespace edm
     firstPreg_(),
     branchNames_(),
     fileFormatVersion_(),
+    doLumiAndRun_(false),
     parameterSetBlobs_(),
     processHistories_(),
     moduleDescriptions_()
@@ -498,22 +500,26 @@ namespace edm
   		   poolNames::fileFormatVersionBranchName(),
   		   0, "FileFormatVersion", fname, currentFileFormatVersion);
 
+    doLumiAndRun_ = (currentFileFormatVersion.value_ >= 2);
+
     if (first) {
       params_ = currentParams; // We don't actually test for equality of this tree...
       shapes_ = currentShapes;
       links_ = currentLinks;
       fileMetaData_ = currentFileMetaData;
       fileFormatVersion_ = currentFileFormatVersion;
-      if (fileFormatVersion_.value_ != 1)
+      if (fileFormatVersion_.value_ < 1 || fileFormatVersion_.value_ > 2)
         throw cms::Exception("MismatchedInput")
-    	  << "This version of FastMerge only supports file version 1\n";
+    	  << "This version of FastMerge only supports file version 1 or 2\n";
 
       eventData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InEvent)));
       eventMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent)));
-      lumiData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InLumi)));
-      lumiMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi)));
-      runData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InRun)));
-      runMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun)));
+      if (doLumiAndRun_) {
+        lumiData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InLumi)));
+        lumiMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi)));
+        runData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InRun)));
+        runMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun)));
+      }
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -593,10 +599,12 @@ namespace edm
       } // end of block
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
-    addFilenameToTChain(*runData_, fname);
-    addFilenameToTChain(*runMetaData_, fname);
-    addFilenameToTChain(*lumiData_, fname);
-    addFilenameToTChain(*lumiMetaData_, fname);
+    if (doLumiAndRun_) {
+      addFilenameToTChain(*runData_, fname);
+      addFilenameToTChain(*runMetaData_, fname);
+      addFilenameToTChain(*lumiData_, fname);
+      addFilenameToTChain(*lumiMetaData_, fname);
+    }
     addFilenameToTChain(*eventData_, fname);
     addFilenameToTChain(*eventMetaData_, fname);
     int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
@@ -728,12 +736,15 @@ namespace edm
     // re-creating objects.
     Option_t const* opts("fast,keep");
 
-    runMetaData_->Merge(&outfile, basketsize, opts);
-    runData_->Merge(&outfile, basketsize, opts);
-    lumiMetaData_->Merge(&outfile, basketsize, opts);
-    lumiData_->Merge(&outfile, basketsize, opts);
+    if (doLumiAndRun_) {
+      runMetaData_->Merge(&outfile, basketsize, opts);
+      runData_->Merge(&outfile, basketsize, opts);
+      lumiMetaData_->Merge(&outfile, basketsize, opts);
+      lumiData_->Merge(&outfile, basketsize, opts);
+    }
     eventMetaData_->Merge(&outfile, basketsize, opts);
     eventData_->Merge(&outfile, basketsize, opts);
+   
   }
 
     
