@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.12 2006/09/21 19:41:56 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.13 2006/10/16 22:56:03 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -17,9 +17,9 @@ $Id: EdmFastMerge.cpp,v 1.12 2006/09/21 19:41:56 wmtan Exp $
 #include "IOPool/Common/bin/FastMerge.h"
 #include "Cintex/Cintex.h"
 #include "FWCore/Utilities/interface/Exception.h"
-#include "FWCore/Utilities/interface/ProblemTracker.h"
+#include "FWCore/PluginManager/interface/ProblemTracker.h"
 #include "FWCore/Utilities/interface/Presence.h"
-#include "FWCore/Utilities/interface/PresenceFactory.h"
+#include "FWCore/PluginManager/interface/PresenceFactory.h"
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 
 
