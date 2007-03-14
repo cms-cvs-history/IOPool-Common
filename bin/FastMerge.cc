@@ -243,10 +243,10 @@ namespace edm
      
 
       // This is suitable only for file format version 1.
-      if ( fileFormatVersion < 1 || fileFormatVersion > 2)
+      if ( fileFormatVersion < 1)
 	throw cms::Exception("MismatchedInput")
 	  << "This version of checkStrictMergeCriteria"
-	  << " only supports file version 1 or 2\n";
+	  << " only supports file version 1 or greater\n";
 
       if (matchMode == BranchDescription::Permissive) return;
 
@@ -508,9 +508,9 @@ namespace edm
       links_ = currentLinks;
       fileMetaData_ = currentFileMetaData;
       fileFormatVersion_ = currentFileFormatVersion;
-      if (fileFormatVersion_.value_ < 1 || fileFormatVersion_.value_ > 2)
+      if (fileFormatVersion_.value_ < 1)
         throw cms::Exception("MismatchedInput")
-    	  << "This version of FastMerge only supports file version 1 or 2\n";
+    	  << "This version of FastMerge only supports file version 1 or greater\n";
 
       eventData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InEvent)));
       eventMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent)));
@@ -534,7 +534,7 @@ namespace edm
         throw cms::Exception("MismatchedInput")
   	<< "File format mismatch:"
   	<< "\nfirst file is version: " << fileFormatVersion_
-  	<< "\nfile " << fname << " is versin: " 
+  	<< "\nfile " << fname << " is version: " 
   	<< currentFileFormatVersion
   	<< '\n';
 
