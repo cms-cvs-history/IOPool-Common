@@ -10,14 +10,14 @@
 #include "TObjArray.h"
 #include "TBranch.h"
 
-#include "DataFormats/Provenance/interface/ProductRegistry.h"
-#include "DataFormats/Provenance/interface/ParameterSetBlob.h"
-#include "DataFormats/Provenance/interface/ProcessHistory.h"
-#include "DataFormats/Provenance/interface/FileFormatVersion.h"
-#include "DataFormats/Provenance/interface/ModuleDescription.h"
-#include "DataFormats/Provenance/interface/BranchType.h"
+#include "DataFormats/Common/interface/ProductRegistry.h"
+#include "DataFormats/Common/interface/ParameterSetBlob.h"
+#include "DataFormats/Common/interface/ProcessHistory.h"
+#include "DataFormats/Common/interface/FileFormatVersion.h"
+#include "DataFormats/Common/interface/ModuleDescription.h"
+#include "DataFormats/Common/interface/BranchType.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
-#include "FWCore/Catalog/interface/FileCatalog.h"
+#include "FWCore/Framework/interface/FileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
@@ -82,7 +82,7 @@ namespace edm
     getTTreeOrThrow(TFile& file, char const* treename)
     {
       TTree* result = dynamic_cast<TTree*>(file.Get(treename));
-      if (!result )
+      if (!result)
 	throw cms::Exception("RootFailure")
 	  << "Unable to find the TTree: "
 	  << treename
@@ -111,16 +111,17 @@ namespace edm
     getTTree(TFile& file, char const* treename)
     {
       TTree* result = dynamic_cast<TTree*>(file.Get(treename));
-      return ( result && !result->IsZombie()  )
+      return (result && !result->IsZombie())
 	? result
 	: 0;
     }
 
     // Create a TChain with the given name, or throw a suitable
-    // exception.
+    // exception.  However, if tree is not present, just return a null pointer.
     std::auto_ptr<TChain>
-    makeTChainOrThrow(std::string const& name)
+    makeTChainOrThrow(std::string const& name, TFile & curfile)
     {
+      if (dynamic_cast<TTree*>(curfile.Get(name.c_str())) == 0) return std::auto_ptr<TChain>();
       std::auto_ptr<TChain> result(new TChain(name.c_str()));
       if (result->IsZombie())
 	throw cms::Exception("RootFailure")
@@ -135,7 +136,7 @@ namespace edm
     void 
     addFilenameToTChain(TChain& chain, std::string const& filename)
     {
-      if ( chain.AddFile(filename.c_str()) == 0 )
+      if (chain.AddFile(filename.c_str()) == 0)
 	throw cms::Exception("RootFailure")
 	  << "TChain::AddFile failed to add the file: "
 	  << filename
@@ -243,7 +244,7 @@ namespace edm
      
 
       // This is suitable only for file format version 1.
-      if ( fileFormatVersion < 1)
+      if (fileFormatVersion < 1)
 	throw cms::Exception("MismatchedInput")
 	  << "This version of checkStrictMergeCriteria"
 	  << " only supports file version 1 or greater\n";
@@ -264,7 +265,7 @@ namespace edm
 	      << "\nfor branch " << i->first
 	      << "\nand only one is allowed for strict merge\n";
 
-	  if (! i->second.isPsetIDUnique() ) 
+	  if (! i->second.isPsetIDUnique()) 
 	    throw cms::Exception("MismatchedInput")
 	      << "File " << filename
 	      << "\nhas  " << i->second.psetIDs().size()
@@ -299,7 +300,7 @@ namespace edm
 		   std::string const& filename,
 		   T& thing)
     {
-      if (! readFromBranch_aux(tree, branchname, index, thing) )
+      if (! readFromBranch_aux(tree, branchname, index, thing))
 	throw cms::Exception("BadInputFile")
 	  << "Failed to read "
 	  << thingname
@@ -357,7 +358,6 @@ namespace edm
     std::vector<std::string> branchNames_;
 
     FileFormatVersion                                fileFormatVersion_;
-    bool doLumiAndRun_;
     std::map<ParameterSetID, ParameterSetBlob>       parameterSetBlobs_;
     std::map<ProcessHistoryID, ProcessHistory>       processHistories_;
     std::map<ModuleDescriptionID, ModuleDescription> moduleDescriptions_;
@@ -394,7 +394,6 @@ namespace edm
     firstPreg_(),
     branchNames_(),
     fileFormatVersion_(),
-    doLumiAndRun_(false),
     parameterSetBlobs_(),
     processHistories_(),
     moduleDescriptions_()
@@ -500,7 +499,6 @@ namespace edm
   		   poolNames::fileFormatVersionBranchName(),
   		   0, "FileFormatVersion", fname, currentFileFormatVersion);
 
-    doLumiAndRun_ = (currentFileFormatVersion.value_ >= 2);
 
     if (first) {
       params_ = currentParams; // We don't actually test for equality of this tree...
@@ -512,14 +510,13 @@ namespace edm
         throw cms::Exception("MismatchedInput")
     	  << "This version of FastMerge only supports file version 1 or greater\n";
 
-      eventData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InEvent)));
-      eventMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent)));
-      if (doLumiAndRun_) {
-        lumiData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InLumi)));
-        lumiMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi)));
-        runData_ = (makeTChainOrThrow(BranchTypeToProductTreeName(InRun)));
-        runMetaData_ = (makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun)));
-      }
+      TFile & curfile = *currentFile;
+      eventData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
+      eventMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent), curfile);
+      lumiData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
+      lumiMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
+      runData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
+      runMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -599,14 +596,13 @@ namespace edm
       } // end of block
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
-    if (doLumiAndRun_) {
-      addFilenameToTChain(*runData_, fname);
-      addFilenameToTChain(*runMetaData_, fname);
-      addFilenameToTChain(*lumiData_, fname);
-      addFilenameToTChain(*lumiMetaData_, fname);
-    }
-    addFilenameToTChain(*eventData_, fname);
-    addFilenameToTChain(*eventMetaData_, fname);
+    if (runMetaData_.get() != 0) addFilenameToTChain(*runMetaData_, fname);
+    if (runData_.get() != 0) addFilenameToTChain(*runData_, fname);
+    if (lumiMetaData_.get() != 0) addFilenameToTChain(*lumiMetaData_, fname);
+    if (lumiData_.get() != 0) addFilenameToTChain(*lumiData_, fname);
+    if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
+    if (eventData_.get() != 0) addFilenameToTChain(*eventData_, fname);
+
     int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
 
     // FIXME: This can report closure of the file even when
@@ -736,14 +732,12 @@ namespace edm
     // re-creating objects.
     Option_t const* opts("fast,keep");
 
-    if (doLumiAndRun_) {
-      runMetaData_->Merge(&outfile, basketsize, opts);
-      runData_->Merge(&outfile, basketsize, opts);
-      lumiMetaData_->Merge(&outfile, basketsize, opts);
-      lumiData_->Merge(&outfile, basketsize, opts);
-    }
-    eventMetaData_->Merge(&outfile, basketsize, opts);
-    eventData_->Merge(&outfile, basketsize, opts);
+    if (runMetaData_.get() != 0) runMetaData_->Merge(&outfile, basketsize, opts);
+    if (runData_.get() != 0) runData_->Merge(&outfile, basketsize, opts);
+    if (lumiMetaData_.get() != 0) lumiMetaData_->Merge(&outfile, basketsize, opts);
+    if (lumiData_.get() != 0) lumiData_->Merge(&outfile, basketsize, opts);
+    if (eventMetaData_.get() != 0) eventMetaData_->Merge(&outfile, basketsize, opts);
+    if (eventData_.get() != 0) eventData_->Merge(&outfile, basketsize, opts);
    
   }
 
