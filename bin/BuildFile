@@ -19,6 +19,7 @@
  <use name=rootcintex>
  <use name=DataFormats/Provenance>
  <use name=FWCore/ParameterSet>
+ <use name=FWCore/Utilities>
  <use name=uuid>
 </bin>
 
