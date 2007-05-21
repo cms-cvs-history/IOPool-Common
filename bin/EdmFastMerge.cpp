@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.14 2007/02/07 23:16:34 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.15 2007/04/11 23:14:52 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -21,6 +21,7 @@ $Id: EdmFastMerge.cpp,v 1.14 2007/02/07 23:16:34 wmtan Exp $
 #include "FWCore/Utilities/interface/Presence.h"
 #include "FWCore/PluginManager/interface/PresenceFactory.h"
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
+#include "FWCore/MessageLogger/interface/MessageLoggerQ.h"
 
 using namespace boost::program_options;
 
@@ -122,6 +123,8 @@ int main(int argc, char* argv[]) {
       config += " untracked vstring fwkJobReports = {'";
       config += vm["jobreport"].as<std::string>(); 
       config += "'}";
+      edm::MessageLoggerQ::JOB(new std::string(vm["jobreport"].as<std::string>()));
+
     }
 
     config +=
