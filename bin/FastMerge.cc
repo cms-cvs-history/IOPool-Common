@@ -716,6 +716,22 @@ namespace edm
     merge_chains(*outFile);
 
     int nEvents = eventData_->GetEntries();
+
+    TFile &f = *outFile;
+    TTree *tEvent = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InEvent).c_str()));
+    if (tEvent) {
+      tEvent->BuildIndex("id_.run_", "id_.event_");
+    }
+    TTree *tLumi = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InLumi).c_str()));
+    if (tLumi) {
+      tLumi->BuildIndex("id_.run_", "id_.luminosityBlock_");
+    }
+    TTree *tRun = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InRun).c_str()));
+    if (tRun) {
+      tRun->BuildIndex("id_.run_");
+    }
+    f.Write();
+
     report_->overrideContributingInputs(outToken, inTokens_);
     report_->overrideEventsWritten(outToken, nEvents);
     report_->outputFileClosed(outToken);
