@@ -16,6 +16,7 @@
 #include "DataFormats/Provenance/interface/FileFormatVersion.h"
 #include "DataFormats/Provenance/interface/ModuleDescription.h"
 #include "DataFormats/Provenance/interface/BranchType.h"
+#include "DataFormats/Provenance/interface/LuminosityBlockAuxiliary.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Catalog/interface/FileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
@@ -231,8 +232,10 @@ namespace edm {
 
       prodlist const& prods = reg.productList();
       for (iter i=prods.begin(), e=prods.end(); i!=e; ++i) {
-	  i->second.init();     // may not be needed
+        if (i->second.branchType() == InEvent) {
+	  i->second.init();
 	  names.push_back(i->second.branchName());
+        }
       }
     }
 
@@ -726,6 +729,24 @@ namespace edm {
     f.Write();
     f.Purge();
 
+    TTree *lumitree = getTTreeOrThrow(f, BranchTypeToProductTreeName(InLumi));
+    TBranch* lumiAux = lumitree->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str());
+    if (!lumiAux) {
+      throw cms::Exception("RootFailure")
+        << "Unable to find the TBranch: "
+        << BranchTypeToAuxiliaryBranchName(InLumi)
+        << "\n in TTree: "
+        << BranchTypeToProductTreeName(InLumi)
+        << '\n';
+    }
+    LuminosityBlockAuxiliary lbAux;
+    LuminosityBlockAuxiliary *lbAuxPtr = &lbAux;
+    lumiAux->SetAddress(&lbAuxPtr);
+    int nLumis = lumiAux->GetEntries();
+    for (int i = 0; i != nLumis; ++i) {
+      lumiAux->GetEntry(i);
+      report_->reportLumiSection(lbAux.run(), lbAux.luminosityBlock());
+    }
     report_->overrideContributingInputs(outToken, inTokens_);
     report_->overrideEventsWritten(outToken, nEvents);
     report_->outputFileClosed(outToken);
