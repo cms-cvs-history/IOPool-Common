@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.15 2007/04/11 23:14:52 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.16 2007/05/21 21:31:05 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
       config += " untracked vstring fwkJobReports = {'";
       config += vm["jobreport"].as<std::string>(); 
       config += "'}";
-      edm::MessageLoggerQ::JOB(new std::string(vm["jobreport"].as<std::string>()));
+      edm::MessageLoggerQ::MLqJOB(new std::string(vm["jobreport"].as<std::string>()));
 
     }
 
