@@ -19,6 +19,8 @@
 #include "DataFormats/Provenance/interface/LuminosityBlockAuxiliary.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Catalog/interface/FileCatalog.h"
+#include "FWCore/Catalog/interface/InputFileCatalog.h"
+#include "FWCore/Catalog/interface/OutputFileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
