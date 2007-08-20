@@ -324,9 +324,6 @@ namespace edm {
 	       std::string const& logicalFileName,
 	       std::string const& catalogName,
 	       pool::FileCatalog::FileID const& fid);
-    TTree* paramsTree() { return params_; }
-    TTree* shapesTree() { return shapes_; }
-    TTree* linksTree() { return links_; }
     TTree* fileMetaDataTree() { return fileMetaData_; }
 
     std::vector<std::string> const& branchNames() const { 
@@ -338,10 +335,6 @@ namespace edm {
     Service<JobReport>   report_;    
     std::vector<JobReport::Token> inTokens_;
     std::auto_ptr<TFile> firstFile_;
-
-    TTree* params_;     // not owned
-    TTree* shapes_;     // not owned
-    TTree* links_ ;     // not owned
 
     TTree*  fileMetaData_;  // not owned
     std::auto_ptr<TChain> eventData_;
@@ -378,9 +371,6 @@ namespace edm {
     report_(),
     inTokens_(),
     firstFile_(),
-    params_(),
-    shapes_(),
-    links_(),
     fileMetaData_(),
     eventData_(),
     eventMetaData_(),
@@ -404,10 +394,6 @@ namespace edm {
     // firstFile_ is controlling.
     if (fileMetaData_) fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
 				    0);
-    std::string const db_string = "db_string";
-    if (links_) links_->SetBranchAddress(db_string.c_str(), 0);
-    if (shapes_) shapes_->SetBranchAddress(db_string.c_str(), 0);
-    if (params_) params_->SetBranchAddress(db_string.c_str(), 0);
   }
   
 
@@ -417,9 +403,7 @@ namespace edm {
   //   1. Check the new file for consistency with the original
   //      file.
   //
-  //      a. two of the POOL trees must match: ##Links and ##Shapes;
-  //         the third POOL tree ##Params is not compared
-  //      b. The MetaData trees must be compatible:
+  //      a. The MetaData trees must be compatible:
   //         i.   the file format version must be equal.
   //         ii.  the ProductRegistries must be equal.
   //         iii. the ModuleDescriptionMaps must be equal.
@@ -445,12 +429,6 @@ namespace edm {
       return;
     }
     bool first = (firstFile_.get() == 0);
-      // --------------------
-      // Test Pool trees
-      // --------------------
-    TTree* currentParams = getTTreeOrThrow(*currentFile, "##Params");
-    TTree* currentShapes = getTTreeOrThrow(*currentFile, "##Shapes");
-    TTree* currentLinks  = getTTreeOrThrow(*currentFile, "##Links");
   
       // --------------------
       // Test MetaData trees
@@ -498,9 +476,6 @@ namespace edm {
 
 
     if (first) {
-      params_ = currentParams; // We don't actually test for equality of this tree...
-      shapes_ = currentShapes;
-      links_ = currentLinks;
       fileMetaData_ = currentFileMetaData;
       fileFormatVersion_ = currentFileFormatVersion;
       if (fileFormatVersion_.value_ < 1)
@@ -532,10 +507,6 @@ namespace edm {
   	<< currentFileFormatVersion
   	<< '\n';
 
-      // These comparison functions throw on failure; we are not
-      // neglecting a return value from 'compare'.
-      compare(shapes_, currentShapes, fname);
-      compare(links_, currentLinks, fname);
     }
 
     std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptionsBuffer;
@@ -631,55 +602,6 @@ namespace edm {
 	"EdmFastMerge", // module label
 	fid,		// File ID (guid)
 	branchNames_);
-
-    //----------
-    // Handle the POOL trees
-    //----------
-    TTree* newShapes = shapesTree()->CloneTree(-1, "fast");
-    newShapes->Write();
-
-    // There are mysterious problems with cloning the entries of the ##Links tree.
-    // So, we copy the entries by hand.
-    TTree* newLinks  = linksTree()->CloneTree(0);
-    Long64_t mentries = linksTree()->GetEntries();
-    char pr0[1024];
-    memset(pr0, sizeof(pr0), '\0');
-    linksTree()->SetBranchAddress("db_string", pr0);
-    for (Long64_t j = 0; j < mentries; ++j) {
-	linksTree()->GetEntry(j);
-	newLinks->Fill();
-        memset(pr0, sizeof(pr0), '\0');
-    }
-    newLinks->AutoSave();
-
-    TTree* newParams = paramsTree()->CloneTree(0);
-    Long64_t nentries = paramsTree()->GetEntries();
-    std::string const fidPrefix("[NAME=FID][VALUE=");
-    std::string const pfnPrefix("[NAME=PFN][VALUE=");
-    char pr1[1024];
-    memset(pr1, sizeof(pr1), '\0');
-    paramsTree()->SetBranchAddress("db_string", pr1);
-    for (Long64_t i = 0; i < nentries; ++i) {
-	paramsTree()->GetEntry(i);
-	std::string entry = pr1;
-	std::string::size_type idxFID = entry.find(fidPrefix);
-	if (idxFID != std::string::npos) {
-	  entry = fidPrefix + fid + "]";
-	  memset(pr1, sizeof(pr1), '\0');
-	  strcpy(pr1, entry.c_str());
-        }
-	std::string::size_type idxPFN = entry.find(pfnPrefix);
-	if (idxPFN != std::string::npos) {
-	    idxPFN += pfnPrefix.size();
-	    entry = pfnPrefix + outfilename + "]";
-	    memset(pr1, sizeof(pr1), '\0');
-	    strcpy(pr1, entry.c_str());
-	}
-	newParams->Fill();
-	memset(pr1, sizeof(pr1), '\0');
-    }
-    newParams->AutoSave();
-
 
 
     //----------
