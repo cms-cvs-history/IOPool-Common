@@ -18,11 +18,11 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Catalog/interface/FileCatalog.h"
 #include "FWCore/Catalog/interface/InputFileCatalog.h"
-#include "FWCore/Catalog/interface/OutputFileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
+#include "POOLCore/Guid.h"
 
 // Notes:
 //
@@ -716,11 +716,10 @@ namespace edm {
     pset.addUntrackedParameter<std::string>("catalog", catalogIn);
     InputFileCatalog catalog(pset, skipMissing);
     ParameterSet opset;
-    opset.addUntrackedParameter<std::string>("fileName", fileOut);
-    opset.addUntrackedParameter<std::string>("logicalFileName", lfnOut);
-    opset.addUntrackedParameter<std::string>("catalog", catalogOut);
-    OutputFileCatalog outputCatalog(opset);
-    pool::FileCatalog::FileID fid = outputCatalog.registerFile(fileOut, lfnOut);
+
+    pool::Guid guid;
+    pool::Guid::create(guid);
+    std::string fid = guid.toString();
 
     std::vector<FileCatalogItem> const& inputFiles = catalog.fileCatalogItems();
 
@@ -730,9 +729,8 @@ namespace edm {
     // We don't use for_each, because we don't want our functor to be
     // copied.
     for (iter i=inputFiles.begin(), e=inputFiles.end(); i != e; ++i) proc(i->fileName(), i->logicalFileName());
-    proc.merge(fileOut, lfnOut, outputCatalog.url(), fid);
+    proc.merge(fileOut, lfnOut, catalogOut, fid);
 
-    outputCatalog.commitCatalog();
   }
 
 }
