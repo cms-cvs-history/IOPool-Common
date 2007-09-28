@@ -131,7 +131,8 @@ namespace edm {
     // fails, throw an appropriate exception.
     void 
     addFilenameToTChain(TChain& chain, std::string const& filename) {
-      if (chain.AddFile(filename.c_str()) == 0)
+//    if (chain.AddFile(filename.c_str()) == 0)
+      if (chain.AddFile(filename.c_str(),-1) == 0)
 	throw cms::Exception("RootFailure")
 	  << "TChain::AddFile failed to add the file: "
 	  << filename
@@ -323,7 +324,7 @@ void
 listFilesInChain(TChain* chain)
 {
   TObjArray* fiList = chain->GetListOfFiles();
-  int numEntries = fiList->GetEntriesFast();
+  int numEntries = fiList->GetEntries();
   if(numEntries == 0) {
     std::cout << "\nTChain " << chain->GetName() << "has no files" << std::endl;
   } else {
@@ -549,12 +550,12 @@ listOpenFiles()
     	  << "This version of FastMerge only supports file version 1 or greater\n";
 
       TFile & curfile = *currentFile;
-      eventData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
+      eventData_     = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
       eventMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent), curfile);
-      lumiData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
-      lumiMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
-      runData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
-      runMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
+      lumiData_      = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
+      lumiMetaData_  = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
+      runData_       = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
+      runMetaData_   = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -628,19 +629,19 @@ listOpenFiles()
   	}
       } // end of block
     }    
-// JMM change
-//  int nEventsBefore = eventMetaData_->GetEntries();
-    int nEventsBefore = eventMetaData_->GetEntriesFast();
-    if (runMetaData_.get() != 0) addFilenameToTChain(*runMetaData_, fname);
-    if (runData_.get() != 0) addFilenameToTChain(*runData_, fname);
-    if (lumiMetaData_.get() != 0) addFilenameToTChain(*lumiMetaData_, fname);
-    if (lumiData_.get() != 0) addFilenameToTChain(*lumiData_, fname);
+    int nEventsBefore = eventMetaData_->GetEntries();
+    if (runMetaData_.get() != 0)   addFilenameToTChain(*runMetaData_, fname);
+    if (runData_.get() != 0)       addFilenameToTChain(*runData_, fname);
+    if (lumiMetaData_.get() != 0)  addFilenameToTChain(*lumiMetaData_, fname);
+    if (lumiData_.get() != 0)      addFilenameToTChain(*lumiData_, fname);
     if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
-    if (eventData_.get() != 0) addFilenameToTChain(*eventData_, fname);
+    if (eventData_.get() != 0)     addFilenameToTChain(*eventData_, fname);
 
-// JMM change
-//  int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
-    int nEvents = eventMetaData_->GetEntriesFast() - nEventsBefore;
+    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
+
+#ifdef VERBOSE
+    std::cout << "\nnEvents for file " << baseName(fname) << " in chain runMetaData_ " << nEvents << std::endl;
+#endif
 
     // FIXME: This can report closure of the file even when
     // closing fails.
@@ -702,9 +703,7 @@ listOpenFiles()
     //----------
     merge_chains(*outFile);
 
-// JMM change
-//  int nEvents = eventData_->GetEntries();
-    int nEvents = eventData_->GetEntriesFast();
+    int nEvents = eventData_->GetEntries();
 
     TFile &f = *outFile;
     TTree *tEvent = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InEvent).c_str()));
