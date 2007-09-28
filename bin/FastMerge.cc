@@ -3,11 +3,14 @@
 #include <memory>
 
 #include "TChain.h"
+#include "TChainElement.h"
 #include "TError.h"
 #include "TFile.h"
 #include "TTree.h"
 #include "TObjArray.h"
 #include "TBranch.h"
+
+//#define VERBOSE
 
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
@@ -308,6 +311,69 @@ namespace edm {
 	  << '\n';
     }
 
+std::string
+baseName(const std::string& s)
+{
+    std::string::size_type idx = s.rfind("/");
+    if(idx == std::string::npos) return s;
+    return s.substr(idx+1,std::string::npos);
+}
+
+void
+listFilesInChain(TChain* chain)
+{
+  TObjArray* fiList = chain->GetListOfFiles();
+  int numEntries = fiList->GetEntriesFast();
+  if(numEntries == 0) {
+    std::cout << "\nTChain " << chain->GetName() << "has no files" << std::endl;
+  } else {
+    std::cout << "\nNumber of files in TChain " << chain->GetName() << " is "
+              << numEntries << std::endl;
+    for(int i = 0; i<numEntries; ++i) {
+      TChainElement* ce = (TChainElement*)fiList->At(i);
+      std::cout << "File name is " << baseName(ce->GetTitle())
+                << "\tChain name is " << ce->GetName() << std::endl;
+    }
+  }
+}
+
+#ifdef NEVER
+void
+closeInputFiles()
+{
+  TFile* f = 0;
+  TIter next(gROOT->GetListOfFiles());
+  while ((f = (TFile*)next())) {
+    if(f) {
+      if(!(f->IsZombie())) {
+        if(f->IsOpen()) {
+          if(std::string(f->GetOption()) == "READ") {
+            std::cout << "Deleting TFile named " << baseName(f->GetName()) << std::endl;
+            delete f;
+          }
+        }
+      }
+    }
+  }
+}
+#endif
+
+void
+listOpenFiles()
+{
+  TFile* f = 0;
+  std::cout << "\nList all open files" << std::endl;
+  TIter next(gROOT->GetListOfFiles());
+  while ((f = (TFile*)next())) {
+    if(f->IsOpen()) {
+      std::string s = f->GetName();
+      std::string::size_type idx = s.rfind("/");
+      std::cout << "There is an open file named " << s.substr(idx+1,std::string::npos)
+                << "\tOption string is " << f->GetOption() << std::endl;
+    }
+  }
+}
+
   } // end of anonymous namespace
 
 
@@ -562,7 +628,9 @@ namespace edm {
   	}
       } // end of block
     }    
-    int nEventsBefore = eventMetaData_->GetEntries();
+// JMM change
+//  int nEventsBefore = eventMetaData_->GetEntries();
+    int nEventsBefore = eventMetaData_->GetEntriesFast();
     if (runMetaData_.get() != 0) addFilenameToTChain(*runMetaData_, fname);
     if (runData_.get() != 0) addFilenameToTChain(*runData_, fname);
     if (lumiMetaData_.get() != 0) addFilenameToTChain(*lumiMetaData_, fname);
@@ -570,7 +638,9 @@ namespace edm {
     if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
     if (eventData_.get() != 0) addFilenameToTChain(*eventData_, fname);
 
-    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
+// JMM change
+//  int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
+    int nEvents = eventMetaData_->GetEntriesFast() - nEventsBefore;
 
     // FIXME: This can report closure of the file even when
     // closing fails.
@@ -632,7 +702,9 @@ namespace edm {
     //----------
     merge_chains(*outFile);
 
-    int nEvents = eventData_->GetEntries();
+// JMM change
+//  int nEvents = eventData_->GetEntries();
+    int nEvents = eventData_->GetEntriesFast();
 
     TFile &f = *outFile;
     TTree *tEvent = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InEvent).c_str()));
@@ -675,11 +747,46 @@ namespace edm {
 
   void
   ProcessInputFile::merge_chains(TFile& outfile) {
+
+#ifdef VERBOSE
+    std::cout << "\nMerging runMetaData chains" << std::endl;
+    if (runMetaData_.get() != 0) listOpenFiles();
+#endif
     if (runMetaData_.get() != 0) mergeTChain(*runMetaData_, outfile);
+    delete runMetaData_.release();
+
+#ifdef VERBOSE
+    std::cout << "\nMerging runData chains" << std::endl;
+    if (runData_.get() != 0) listOpenFiles();
+#endif
     if (runData_.get() != 0) mergeTChain(*runData_, outfile);
+    delete runData_.release();
+
+#ifdef VERBOSE
+    std::cout << "\nMerging lumiMetaData chains" << std::endl;
+    if (lumiMetaData_.get() != 0) listOpenFiles();
+#endif
     if (lumiMetaData_.get() != 0) mergeTChain(*lumiMetaData_, outfile);
+    delete lumiMetaData_.release();
+
+#ifdef VERBOSE
+    std::cout << "\nMerging lumiData chains" << std::endl;
+    if (lumiData_.get() != 0) listOpenFiles();
+#endif
     if (lumiData_.get() != 0) mergeTChain(*lumiData_, outfile);
+    delete lumiData_.release();
+
+#ifdef VERBOSE
+    std::cout << "\nMerging eventMetaData chains" << std::endl;
+    if (eventMetaData_.get() != 0) listOpenFiles();
+#endif
     if (eventMetaData_.get() != 0) mergeTChain(*eventMetaData_, outfile);
+    delete eventMetaData_.release();
+
+#ifdef VERBOSE
+    std::cout << "\nMerging eventData chains" << std::endl;
+    if (eventData_.get() != 0) listOpenFiles();
+#endif
     if (eventData_.get() != 0) mergeTChain(*eventData_, outfile);
   }
 
