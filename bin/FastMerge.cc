@@ -3,11 +3,14 @@
 #include <memory>
 
 #include "TChain.h"
+#include "TChainElement.h"
 #include "TError.h"
 #include "TFile.h"
 #include "TTree.h"
 #include "TObjArray.h"
 #include "TBranch.h"
+
+//#define VERBOSE
 
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
@@ -128,7 +131,8 @@ namespace edm {
     // fails, throw an appropriate exception.
     void 
     addFilenameToTChain(TChain& chain, std::string const& filename) {
-      if (chain.AddFile(filename.c_str()) == 0)
+//    if (chain.AddFile(filename.c_str()) == 0)
+      if (chain.AddFile(filename.c_str(),-1) == 0)
 	throw cms::Exception("RootFailure")
 	  << "TChain::AddFile failed to add the file: "
 	  << filename
@@ -308,6 +312,48 @@ namespace edm {
 	  << '\n';
     }
 
+std::string
+baseName(const std::string& s)
+{
+    std::string::size_type idx = s.rfind("/");
+    if(idx == std::string::npos) return s;
+    return s.substr(idx+1,std::string::npos);
+}
+
+void
+listFilesInChain(TChain* chain)
+{
+  TObjArray* fiList = chain->GetListOfFiles();
+  int numEntries = fiList->GetEntries();
+  if(numEntries == 0) {
+    std::cout << "\nTChain " << chain->GetName() << "has no files" << std::endl;
+  } else {
+    std::cout << "\nNumber of files in TChain " << chain->GetName() << " is "
+              << numEntries << std::endl;
+    for(int i = 0; i<numEntries; ++i) {
+      TChainElement* ce = (TChainElement*)fiList->At(i);
+      std::cout << "File name is " << baseName(ce->GetTitle())
+                << "\tChain name is " << ce->GetName() << std::endl;
+    }
+  }
+}
+
+void
+listOpenFiles()
+{
+  TFile* f = 0;
+  std::cout << "\nList all open files" << std::endl;
+  TIter next(gROOT->GetListOfFiles());
+  while ((f = (TFile*)next())) {
+    if(f->IsOpen()) {
+      std::string s = f->GetName();
+      std::string::size_type idx = s.rfind("/");
+      std::cout << "There is an open file named " << s.substr(idx+1,std::string::npos)
+                << "\tOption string is " << f->GetOption() << std::endl;
+    }
+  }
+}
+
   } // end of anonymous namespace
 
 
@@ -483,12 +529,12 @@ namespace edm {
     	  << "This version of FastMerge only supports file version 1 or greater\n";
 
       TFile & curfile = *currentFile;
-      eventData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
+      eventData_     = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
       eventMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent), curfile);
-      lumiData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
-      lumiMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
-      runData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
-      runMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
+      lumiData_      = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
+      lumiMetaData_  = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
+      runData_       = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
+      runMetaData_   = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -563,14 +609,19 @@ namespace edm {
       } // end of block
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
-    if (runMetaData_.get() != 0) addFilenameToTChain(*runMetaData_, fname);
-    if (runData_.get() != 0) addFilenameToTChain(*runData_, fname);
-    if (lumiMetaData_.get() != 0) addFilenameToTChain(*lumiMetaData_, fname);
-    if (lumiData_.get() != 0) addFilenameToTChain(*lumiData_, fname);
-    if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
-    if (eventData_.get() != 0) addFilenameToTChain(*eventData_, fname);
+    int nEvents = 0;
 
-    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
+    if (runMetaData_.get() != 0)   addFilenameToTChain(*runMetaData_, fname);
+    if (runData_.get() != 0)       addFilenameToTChain(*runData_, fname);
+    if (lumiMetaData_.get() != 0)  addFilenameToTChain(*lumiMetaData_, fname);
+    if (lumiData_.get() != 0)      addFilenameToTChain(*lumiData_, fname);
+    if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
+    if (eventData_.get() != 0)     addFilenameToTChain(*eventData_, fname);
+
+    nEvents = eventMetaData_->GetEntries() - nEventsBefore;
+#ifdef VERBOSE
+    std::cout << "\nnEvents for file " << baseName(fname) << " in chain runMetaData_ " << nEvents << std::endl;
+#endif	// End VERBOSE
 
     // FIXME: This can report closure of the file even when
     // closing fails.
@@ -675,12 +726,66 @@ namespace edm {
 
   void
   ProcessInputFile::merge_chains(TFile& outfile) {
-    if (runMetaData_.get() != 0) mergeTChain(*runMetaData_, outfile);
-    if (runData_.get() != 0) mergeTChain(*runData_, outfile);
-    if (lumiMetaData_.get() != 0) mergeTChain(*lumiMetaData_, outfile);
-    if (lumiData_.get() != 0) mergeTChain(*lumiData_, outfile);
-    if (eventMetaData_.get() != 0) mergeTChain(*eventMetaData_, outfile);
+
+#ifdef VERBOSE
+    if (runMetaData_.get() != 0) {
+      std::cout << "\nMerging runMetaData chains" << std::endl;
+      mergeTChain(*runMetaData_, outfile);
+      listOpenFiles();
+      delete runMetaData_.release();
+    }
+    if (runData_.get() != 0) {
+      std::cout << "\nMerging runData chains" << std::endl;
+      mergeTChain(*runData_, outfile);
+      listOpenFiles();
+      delete runData_.release();
+    }
+    if (lumiMetaData_.get() != 0) {
+      std::cout << "\nMerging lumiMetaData chains" << std::endl;
+      mergeTChain(*lumiMetaData_, outfile);
+      listOpenFiles();
+      delete lumiMetaData_.release();
+    }
+    if (lumiData_.get() != 0) {
+      std::cout << "\nMerging lumiData chains" << std::endl;
+      mergeTChain(*lumiData_, outfile);
+      listOpenFiles();
+      delete lumiData_.release();
+    }
+    if (eventMetaData_.get() != 0) {
+      std::cout << "\nMerging eventMetaData chains" << std::endl;
+      mergeTChain(*eventMetaData_, outfile);
+      listOpenFiles();
+      delete eventMetaData_.release();
+    }
+    if (eventData_.get() != 0) {
+      std::cout << "\nMerging eventData chains" << std::endl;
+      mergeTChain(*eventData_, outfile);
+      listOpenFiles();
+    }
+#else
+    if (runMetaData_.get() != 0) {
+      mergeTChain(*runMetaData_, outfile);
+      delete runMetaData_.release();
+    }
+    if (runData_.get() != 0) {
+      mergeTChain(*runData_, outfile);
+      delete runData_.release();
+    }
+    if (lumiMetaData_.get() != 0) {
+      mergeTChain(*lumiMetaData_, outfile);
+      delete lumiMetaData_.release();
+    }
+    if (lumiData_.get() != 0) {
+      mergeTChain(*lumiData_, outfile);
+      delete lumiData_.release();
+    }
+    if (eventMetaData_.get() != 0) {
+      mergeTChain(*eventMetaData_, outfile);
+      delete eventMetaData_.release();
+    }
     if (eventData_.get() != 0) mergeTChain(*eventData_, outfile);
+#endif	// End VERBOSE
   }
 
   void
