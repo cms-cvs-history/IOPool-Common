@@ -338,27 +338,6 @@ listFilesInChain(TChain* chain)
   }
 }
 
-#ifdef NEVER
-void
-closeInputFiles()
-{
-  TFile* f = 0;
-  TIter next(gROOT->GetListOfFiles());
-  while ((f = (TFile*)next())) {
-    if(f) {
-      if(!(f->IsZombie())) {
-        if(f->IsOpen()) {
-          if(std::string(f->GetOption()) == "READ") {
-            std::cout << "Deleting TFile named " << baseName(f->GetName()) << std::endl;
-            delete f;
-          }
-        }
-      }
-    }
-  }
-}
-#endif
-
 void
 listOpenFiles()
 {
@@ -630,6 +609,8 @@ listOpenFiles()
       } // end of block
     }    
     int nEventsBefore = eventMetaData_->GetEntries();
+    int nEvents = 0;
+
     if (runMetaData_.get() != 0)   addFilenameToTChain(*runMetaData_, fname);
     if (runData_.get() != 0)       addFilenameToTChain(*runData_, fname);
     if (lumiMetaData_.get() != 0)  addFilenameToTChain(*lumiMetaData_, fname);
@@ -637,11 +618,10 @@ listOpenFiles()
     if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
     if (eventData_.get() != 0)     addFilenameToTChain(*eventData_, fname);
 
-    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
-
+    nEvents = eventMetaData_->GetEntries() - nEventsBefore;
 #ifdef VERBOSE
     std::cout << "\nnEvents for file " << baseName(fname) << " in chain runMetaData_ " << nEvents << std::endl;
-#endif
+#endif	// End VERBOSE
 
     // FIXME: This can report closure of the file even when
     // closing fails.
@@ -748,45 +728,64 @@ listOpenFiles()
   ProcessInputFile::merge_chains(TFile& outfile) {
 
 #ifdef VERBOSE
-    std::cout << "\nMerging runMetaData chains" << std::endl;
-    if (runMetaData_.get() != 0) listOpenFiles();
-#endif
-    if (runMetaData_.get() != 0) mergeTChain(*runMetaData_, outfile);
-    delete runMetaData_.release();
-
-#ifdef VERBOSE
-    std::cout << "\nMerging runData chains" << std::endl;
-    if (runData_.get() != 0) listOpenFiles();
-#endif
-    if (runData_.get() != 0) mergeTChain(*runData_, outfile);
-    delete runData_.release();
-
-#ifdef VERBOSE
-    std::cout << "\nMerging lumiMetaData chains" << std::endl;
-    if (lumiMetaData_.get() != 0) listOpenFiles();
-#endif
-    if (lumiMetaData_.get() != 0) mergeTChain(*lumiMetaData_, outfile);
-    delete lumiMetaData_.release();
-
-#ifdef VERBOSE
-    std::cout << "\nMerging lumiData chains" << std::endl;
-    if (lumiData_.get() != 0) listOpenFiles();
-#endif
-    if (lumiData_.get() != 0) mergeTChain(*lumiData_, outfile);
-    delete lumiData_.release();
-
-#ifdef VERBOSE
-    std::cout << "\nMerging eventMetaData chains" << std::endl;
-    if (eventMetaData_.get() != 0) listOpenFiles();
-#endif
-    if (eventMetaData_.get() != 0) mergeTChain(*eventMetaData_, outfile);
-    delete eventMetaData_.release();
-
-#ifdef VERBOSE
-    std::cout << "\nMerging eventData chains" << std::endl;
-    if (eventData_.get() != 0) listOpenFiles();
-#endif
+    if (runMetaData_.get() != 0) {
+      std::cout << "\nMerging runMetaData chains" << std::endl;
+      mergeTChain(*runMetaData_, outfile);
+      listOpenFiles();
+      delete runMetaData_.release();
+    }
+    if (runData_.get() != 0) {
+      std::cout << "\nMerging runData chains" << std::endl;
+      mergeTChain(*runData_, outfile);
+      listOpenFiles();
+      delete runData_.release();
+    }
+    if (lumiMetaData_.get() != 0) {
+      std::cout << "\nMerging lumiMetaData chains" << std::endl;
+      mergeTChain(*lumiMetaData_, outfile);
+      listOpenFiles();
+      delete lumiMetaData_.release();
+    }
+    if (lumiData_.get() != 0) {
+      std::cout << "\nMerging lumiData chains" << std::endl;
+      mergeTChain(*lumiData_, outfile);
+      listOpenFiles();
+      delete lumiData_.release();
+    }
+    if (eventMetaData_.get() != 0) {
+      std::cout << "\nMerging eventMetaData chains" << std::endl;
+      mergeTChain(*eventMetaData_, outfile);
+      listOpenFiles();
+      delete eventMetaData_.release();
+    }
+    if (eventData_.get() != 0) {
+      std::cout << "\nMerging eventData chains" << std::endl;
+      mergeTChain(*eventData_, outfile);
+      listOpenFiles();
+    }
+#else
+    if (runMetaData_.get() != 0) {
+      mergeTChain(*runMetaData_, outfile);
+      delete runMetaData_.release();
+    }
+    if (runData_.get() != 0) {
+      mergeTChain(*runData_, outfile);
+      delete runData_.release();
+    }
+    if (lumiMetaData_.get() != 0) {
+      mergeTChain(*lumiMetaData_, outfile);
+      delete lumiMetaData_.release();
+    }
+    if (lumiData_.get() != 0) {
+      mergeTChain(*lumiData_, outfile);
+      delete lumiData_.release();
+    }
+    if (eventMetaData_.get() != 0) {
+      mergeTChain(*eventMetaData_, outfile);
+      delete eventMetaData_.release();
+    }
     if (eventData_.get() != 0) mergeTChain(*eventData_, outfile);
+#endif	// End VERBOSE
   }
 
   void
