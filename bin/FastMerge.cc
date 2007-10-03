@@ -12,10 +12,12 @@
 
 //#define VERBOSE
 
+#include "IOPool/Common/interface/FileIdentifier.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
 #include "DataFormats/Provenance/interface/ProcessHistory.h"
 #include "DataFormats/Provenance/interface/FileFormatVersion.h"
+#include "DataFormats/Provenance/interface/FileID.h"
 #include "DataFormats/Provenance/interface/BranchType.h"
 #include "DataFormats/Provenance/interface/LuminosityBlockAuxiliary.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -25,7 +27,6 @@
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
-#include "POOLCore/Guid.h"
 
 // Notes:
 //
@@ -368,8 +369,7 @@ listOpenFiles()
     void operator()(std::string const& fname, std::string const& logicalFileName);
     void merge(std::string const& outfilename,
 	       std::string const& logicalFileName,
-	       std::string const& catalogName,
-	       pool::FileCatalog::FileID const& fid);
+	       std::string const& catalogName);
     TTree* fileMetaDataTree() { return fileMetaData_; }
 
     std::vector<std::string> const& branchNames() const { 
@@ -632,8 +632,7 @@ listOpenFiles()
   void
   ProcessInputFile::merge(std::string const& outfilename,
 	       std::string const& logicalFileName,
-	       std::string const& catalogName,
-	       pool::FileCatalog::FileID const& fid) {
+	       std::string const& catalogName) {
     // We are careful to open the file just before calling
     // merge_chains, because we must not allow alteration of ROOT's
     // global 'most recent file opened' state between creation of the
@@ -641,6 +640,8 @@ listOpenFiles()
     // we make in merge_chains. Isn't it delicious?
 
     std::auto_ptr<TFile> outFile(openTFile(outfilename, logicalFileName, true));
+
+    FileID fid(createFileIdentifier());
 
     // FIXME: This output file open/close should be managed by a
     // sentry object.
@@ -651,7 +652,7 @@ listOpenFiles()
 	catalogName,    // catalog
 	"FastMerge",    // source class name
 	"EdmFastMerge", // module label
-	fid,		// File ID (guid)
+	fid.fid(),		// File ID (guid)
 	branchNames_);
 
 
@@ -659,6 +660,9 @@ listOpenFiles()
     // Write out file-level metadata
     //----------
     TTree* newMeta   = fileMetaDataTree()->CloneTree(0);
+
+    FileID *fidp = &fid;
+    newMeta->SetBranchAddress(poolNames::fileIdentifierBranchName().c_str(), &fidp);
 
     FileFormatVersion *ffvp = &fileFormatVersion_;
     newMeta->SetBranchAddress(poolNames::fileFormatVersionBranchName().c_str(), &ffvp);
@@ -822,9 +826,6 @@ listOpenFiles()
     InputFileCatalog catalog(pset, skipMissing);
     ParameterSet opset;
 
-    pool::Guid guid;
-    pool::Guid::create(guid);
-    std::string fid = guid.toString();
 
     std::vector<FileCatalogItem> const& inputFiles = catalog.fileCatalogItems();
 
@@ -834,7 +835,7 @@ listOpenFiles()
     // We don't use for_each, because we don't want our functor to be
     // copied.
     for (iter i=inputFiles.begin(), e=inputFiles.end(); i != e; ++i) proc(i->fileName(), i->logicalFileName());
-    proc.merge(fileOut, lfnOut, catalogOut, fid);
+    proc.merge(fileOut, lfnOut, catalogOut);
 
   }
 
