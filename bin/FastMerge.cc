@@ -318,7 +318,7 @@ baseName(const std::string& s)
 {
     std::string::size_type idx = s.rfind("/");
     if(idx == std::string::npos) return s;
-    return s.substr(idx+1,std::string::npos);
+    return s.substr(idx+1);
 }
 
 void
@@ -347,9 +347,7 @@ listOpenFiles()
   TIter next(gROOT->GetListOfFiles());
   while ((f = (TFile*)next())) {
     if(f->IsOpen()) {
-      std::string s = f->GetName();
-      std::string::size_type idx = s.rfind("/");
-      std::cout << "There is an open file named " << s.substr(idx+1,std::string::npos)
+      std::cout << "There is an open file named " << baseName(f->GetName())
                 << "\tOption string is " << f->GetOption() << std::endl;
     }
   }
