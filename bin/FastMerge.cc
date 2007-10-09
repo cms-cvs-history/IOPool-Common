@@ -144,14 +144,13 @@ namespace edm {
 
     void
     mergeTChain(TChain & chain, TFile & outfile) {
-      Int_t const     basketsize(32000);
       // We have to specify 'keep' to prevent ROOT from calling delete
       // on the TFile* we pass to TChain::Merge; we specify 'fast' to
       // get ROOT to transfer raw data, rather than unzipping and
       // re-creating objects.
       Option_t const* opts("fast,keep");
 
-      if (chain.Merge(&outfile, basketsize, opts) == 0) {
+      if (chain.Merge(&outfile, 0, opts) == 0) {
         throw cms::Exception("RootFailure")
           << "TChain::Merge failed to merge"
           << "\nto the TChain for TTree: "
