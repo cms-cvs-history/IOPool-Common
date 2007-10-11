@@ -4,6 +4,7 @@
  <use name=rootcore>
  <use name=root>
  <use name=rootcintex>
+ <use name=DataFormats/StdDictionaries>
  <use name=DataFormats/Provenance>
  <use name=FWCore/Catalog>
  <use name=FWCore/MessageLogger>
@@ -11,7 +12,6 @@
  <use name=FWCore/ParameterSet>
  <use name=FWCore/PluginManager>
  <use name=FWCore/Utilities>
- <use name=IOPool/Common>
  <use name=uuid>
 </bin>
 
@@ -21,6 +21,7 @@
  <use name=rootcore>
  <use name=root>
  <use name=rootcintex>
+ <use name=DataFormats/StdDictionaries>
  <use name=DataFormats/Provenance>
  <use name=FWCore/Catalog>
  <use name=FWCore/MessageLogger>
@@ -28,7 +29,6 @@
  <use name=FWCore/ParameterSet>
  <use name=FWCore/PluginManager>
  <use name=FWCore/Utilities>
- <use name=IOPool/Common>
  <use name=uuid>
 </bin>
 

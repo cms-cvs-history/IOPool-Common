@@ -12,7 +12,7 @@
 
 //#define VERBOSE
 
-#include "IOPool/Common/interface/FileIdentifier.h"
+#include "FWCore/Catalog/interface/FileIdentifier.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
 #include "DataFormats/Provenance/interface/ProcessHistory.h"
