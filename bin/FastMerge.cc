@@ -357,6 +357,7 @@ namespace edm {
     treeNames_(),
     trees_(END, 0)
   {
+    TTree::SetMaxTreeSize(kMaxLong64);
     treeNames_.reserve(END);
     treeNames_.push_back(BranchTypeToProductTreeName(InEvent));
     treeNames_.push_back(BranchTypeToMetaDataTreeName(InEvent));
