@@ -12,12 +12,13 @@
 
 //#define VERBOSE
 
-#include "FWCore/Catalog/interface/FileIdentifier.h"
+//#include "FWCore/Catalog/interface/FileIdentifier.h"
+#include "POOLCore/Guid.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
 #include "DataFormats/Provenance/interface/ProcessHistory.h"
 #include "DataFormats/Provenance/interface/FileFormatVersion.h"
-#include "DataFormats/Provenance/interface/FileID.h"
+//#include "DataFormats/Provenance/interface/FileID.h"
 #include "DataFormats/Provenance/interface/BranchType.h"
 #include "DataFormats/Provenance/interface/LuminosityBlockAuxiliary.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -271,6 +272,18 @@ namespace edm {
 	  << filename 
 	  << '\n';
     }
+
+    std::string BranchTypeToMajorIndexName(BranchType const& branchType) {
+      return BranchTypeToAuxiliaryBranchName(branchType) + ".id_.run_";
+    } 
+    std::string BranchTypeToMinorIndexName(BranchType const& branchType) {
+      return (branchType == InEvent ? BranchTypeToAuxiliaryBranchName(branchType) + ".id_.event_" :
+             (branchType == InLumi ? BranchTypeToAuxiliaryBranchName(branchType) + ".id_.luminosityBlock_" :
+              std::string()));
+
+  } 
+
+
   } // end of anonymous namespace
 
 
@@ -317,7 +330,7 @@ namespace edm {
     std::map<ModuleDescriptionID, ModuleDescription> moduleDescriptions_;
     boost::shared_ptr<TFile> outFile_;
     std::string outFileName_;
-    FileID fid_;
+    // FileID fid_;
     std::string logicalOutFileName_;
     std::string outCatalogName_;
     std::vector<std::string> treeNames_;
@@ -351,7 +364,7 @@ namespace edm {
     moduleDescriptions_(),
     outFile_(),
     outFileName_(outFileName),
-    fid_(createFileIdentifier()),
+//  fid_(createFileIdentifier()),
     logicalOutFileName_(logicalOutFileName),
     outCatalogName_(outCatalogName),
     treeNames_(),
@@ -536,6 +549,9 @@ namespace edm {
     }
 
     if (first_) {
+      pool::Guid guid;
+      pool::Guid::create(guid);
+      std::string fid = guid.toString();
       outFile_ = boost::shared_ptr<TFile>(openTFile(outFileName_, logicalOutFileName_, true).release());
       // FIXME: This output file open/close should be managed by a sentry object.
       outToken_ = report_->outputFileOpened(
@@ -544,7 +560,7 @@ namespace edm {
 	  outCatalogName_,	// catalog
 	  "FastMerge",		// source class name
 	  "EdmFastMerge",	// module label
-	  fid_.fid(),		// File ID (guid)
+	  fid,			// File ID (guid)
 	  branchNames_);
     }
 
@@ -586,12 +602,14 @@ namespace edm {
     // Write out file-level metadata
     //----------
 
+/*
     FileID *fidp = &fid_;
     if (fileMetaData_->GetBranch(poolNames::fileIdentifierBranchName().c_str())) {
       fileMetaData_->SetBranchAddress(poolNames::fileIdentifierBranchName().c_str(), &fidp);
     } else {
       fileMetaData_->Branch(poolNames::fileIdentifierBranchName().c_str(), &fidp);
     }
+*/
 
     FileFormatVersion *ffvp = &fileFormatVersion_;
     fileMetaData_->SetBranchAddress(poolNames::fileFormatVersionBranchName().c_str(), &ffvp);
