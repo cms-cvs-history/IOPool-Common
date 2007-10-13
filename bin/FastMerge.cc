@@ -616,37 +616,52 @@ namespace edm {
 
     TFile &f = *outFile_;
     TTree *tEvent = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InEvent).c_str()));
-    if (tEvent) {
-      tEvent->BuildIndex("id_.run_", "id_.event_");
+    if (tEvent && tEvent->GetBranch(BranchTypeToAuxiliaryBranchName(InEvent).c_str()) != 0) {
+      tEvent->BuildIndex(BranchTypeToMajorIndexName(InEvent).c_str(),
+	 	       BranchTypeToMinorIndexName(InEvent).c_str());
+     
     }
     TTree *tLumi = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InLumi).c_str()));
-    if (tLumi) {
-      tLumi->BuildIndex("id_.run_", "id_.luminosityBlock_");
+    if (tLumi && tLumi->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str()) != 0) {
+      tLumi->BuildIndex(BranchTypeToMajorIndexName(InLumi).c_str(),
+	 	       BranchTypeToMinorIndexName(InLumi).c_str());
     }
     TTree *tRun = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InRun).c_str()));
-    if (tRun) {
-      tRun->BuildIndex("id_.run_");
+    if (tRun && tRun->GetBranch(BranchTypeToAuxiliaryBranchName(InRun).c_str()) != 0) {
+      tRun->BuildIndex(BranchTypeToMajorIndexName(InRun).c_str());
     }
     f.Write();
     f.Purge();
 
-    TTree *lumitree = getTTreeOrThrow(f, BranchTypeToProductTreeName(InLumi));
-    TBranch* lumiAux = lumitree->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str());
-    if (!lumiAux) {
-      throw cms::Exception("RootFailure")
-        << "Unable to find the TBranch: "
-        << BranchTypeToAuxiliaryBranchName(InLumi)
-        << "\n in TTree: "
-        << BranchTypeToProductTreeName(InLumi)
-        << '\n';
-    }
-    LuminosityBlockAuxiliary lbAux;
-    LuminosityBlockAuxiliary *lbAuxPtr = &lbAux;
-    lumiAux->SetAddress(&lbAuxPtr);
-    int nLumis = lumiAux->GetEntries();
-    for (int i = 0; i != nLumis; ++i) {
-      lumiAux->GetEntry(i);
-      report_->reportLumiSection(lbAux.run(), lbAux.luminosityBlock());
+    if (tLumi != 0) {
+      TTree *treeLumi = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InLumi).c_str()));
+      TBranch* lumiAux = treeLumi->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str());
+      if (lumiAux) {
+        LuminosityBlockAuxiliary lbAux;
+        LuminosityBlockAuxiliary *lbAuxPtr = &lbAux;
+        lumiAux->SetAddress(&lbAuxPtr);
+        int nLumis = lumiAux->GetEntries();
+        for (int i = 0; i != nLumis; ++i) {
+          lumiAux->GetEntry(i);
+          report_->reportLumiSection(lbAux.run(), lbAux.luminosityBlock());
+        }
+      } else {
+        if (fileFormatVersion_.value_ >= 3) {
+          throw cms::Exception("RootFailure")
+            << "Unable to find the TBranch: "
+            << BranchTypeToAuxiliaryBranchName(InLumi)
+            << "\n in TTree: "
+            << BranchTypeToProductTreeName(InLumi)
+            << '\n';
+        }
+      }
+    } else {
+      if (fileFormatVersion_.value_ >= 3) {
+        throw cms::Exception("RootFailure")
+          << "Unable to find the TTree: "
+          << BranchTypeToProductTreeName(InLumi)
+          << '\n';
+      }
     }
     report_->overrideContributingInputs(outToken_, inTokens_);
     report_->overrideEventsWritten(outToken_, nEvents);
