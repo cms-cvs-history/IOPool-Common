@@ -2,23 +2,28 @@
 
 #include <memory>
 
-#include "TChain.h"
+#include "Rtypes.h"
 #include "TError.h"
 #include "TFile.h"
-#include "TTree.h"
 #include "TObjArray.h"
 #include "TBranch.h"
+#include "TTree.h"
+#include "TTreeCloner.h"
 
+//#define VERBOSE
+
+//#include "FWCore/Catalog/interface/FileIdentifier.h"
+#include "POOLCore/Guid.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
 #include "DataFormats/Provenance/interface/ProcessHistory.h"
 #include "DataFormats/Provenance/interface/FileFormatVersion.h"
+//#include "DataFormats/Provenance/interface/FileID.h"
 #include "DataFormats/Provenance/interface/BranchType.h"
 #include "DataFormats/Provenance/interface/LuminosityBlockAuxiliary.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Catalog/interface/FileCatalog.h"
 #include "FWCore/Catalog/interface/InputFileCatalog.h"
-#include "FWCore/Catalog/interface/OutputFileCatalog.h"
 #include "FWCore/Utilities/interface/GetFileFormatVersion.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
@@ -54,8 +59,13 @@ namespace edm {
 	bool const openInWriteMode = false,
 	bool const noThrow = false) {
       char const* const option = openInWriteMode ? "recreate" : "read";
+      std::auto_ptr<TFile> result;
       if (noThrow) gErrorIgnoreLevel = kBreak;
-      std::auto_ptr<TFile> result(TFile::Open(filename.c_str(),option));
+      try {
+        result = std::auto_ptr<TFile>(TFile::Open(filename.c_str(),option));
+      } catch(cms::Exception e) {
+	// Will rethrow below if noThrow is false.
+      }
       if (noThrow) gErrorIgnoreLevel = kError;
       if (!result.get() || result->IsZombie()) {
 	if (noThrow) return std::auto_ptr<TFile>();
@@ -66,7 +76,7 @@ namespace edm {
             << "before the file name in your configuration file.\n";
         }
 	throw cms::Exception("RootFailure")
-	  << "Unable to open file: " 
+	  << "Unable to find file or unable to open file: " 
 	  << filename
 	  << '\n';
       }
@@ -108,51 +118,6 @@ namespace edm {
       return (result && !result->IsZombie())
 	? result
 	: 0;
-    }
-
-    // Create a TChain with the given name, or throw a suitable
-    // exception.  However, if tree is not present, just return a null pointer.
-    std::auto_ptr<TChain>
-    makeTChainOrThrow(std::string const& name, TFile & curfile) {
-      if (dynamic_cast<TTree*>(curfile.Get(name.c_str())) == 0) return std::auto_ptr<TChain>();
-      std::auto_ptr<TChain> result(new TChain(name.c_str()));
-      if (result->IsZombie())
-	throw cms::Exception("RootFailure")
-	  << "Unable to create a TChain with name: "
-	  << name
-	  << '\n';
-      return result;
-    }
-
-    // Try to add the given filename to the given TChain. If this
-    // fails, throw an appropriate exception.
-    void 
-    addFilenameToTChain(TChain& chain, std::string const& filename) {
-      if (chain.AddFile(filename.c_str()) == 0)
-	throw cms::Exception("RootFailure")
-	  << "TChain::AddFile failed to add the file: "
-	  << filename
-	  << "\nto the TChain for TTree: "
-	  << chain.GetName()
-	  << '\n';
-    }
-
-    void
-    mergeTChain(TChain & chain, TFile & outfile) {
-      Int_t const     basketsize(32000);
-      // We have to specify 'keep' to prevent ROOT from calling delete
-      // on the TFile* we pass to TChain::Merge; we specify 'fast' to
-      // get ROOT to transfer raw data, rather than unzipping and
-      // re-creating objects.
-      Option_t const* opts("fast,keep");
-
-      if (chain.Merge(&outfile, basketsize, opts) == 0) {
-        throw cms::Exception("RootFailure")
-          << "TChain::Merge failed to merge"
-          << "\nto the TChain for TTree: "
-          << chain.GetName()
-          << '\n';
-      }
     }
 
     // Helper functions for the comparison of files.
@@ -308,6 +273,17 @@ namespace edm {
 	  << '\n';
     }
 
+    std::string BranchTypeToMajorIndexName(BranchType const& branchType) {
+      return BranchTypeToAuxiliaryBranchName(branchType) + ".id_.run_";
+    } 
+    std::string BranchTypeToMinorIndexName(BranchType const& branchType) {
+      return (branchType == InEvent ? BranchTypeToAuxiliaryBranchName(branchType) + ".id_.event_" :
+             (branchType == InLumi ? BranchTypeToAuxiliaryBranchName(branchType) + ".id_.luminosityBlock_" :
+              std::string()));
+
+  } 
+
+
   } // end of anonymous namespace
 
 
@@ -317,32 +293,31 @@ namespace edm {
   public:
     ProcessInputFile(std::string const& catalogName,
 		     BranchDescription::MatchMode matchMode,
-		     bool skipMissing);
+		     bool skipMissing,
+		     std::string const& outName,
+		     std::string const& logicalOutName,
+		     std::string const& outCatalogName);
     ~ProcessInputFile();
-    void operator()(std::string const& fname, std::string const& logicalFileName);
-    void merge(std::string const& outfilename,
-	       std::string const& logicalFileName,
-	       std::string const& catalogName,
-	       pool::FileCatalog::FileID const& fid);
-    TTree* fileMetaDataTree() { return fileMetaData_; }
-
-    std::vector<std::string> const& branchNames() const { 
-      return branchNames_;
-    }
+    void operator()(FileCatalogItem const& item);
+    void finalize();
 
   private:
+    enum Trees {
+	EVENT = 0,
+	EVENTMETA = 1,
+	LUMI = 2,
+	LUMIMETA = 3,
+	RUN = 4,
+	RUNMETA = 5,
+	END = 6
+    };
     std::string catalogURL_;
     Service<JobReport>   report_;    
     std::vector<JobReport::Token> inTokens_;
-    std::auto_ptr<TFile> firstFile_;
+    JobReport::Token outToken_;
+    bool first_;
 
-    TTree*  fileMetaData_;  // not owned
-    std::auto_ptr<TChain> eventData_;
-    std::auto_ptr<TChain> eventMetaData_;
-    std::auto_ptr<TChain> lumiData_;
-    std::auto_ptr<TChain> lumiMetaData_;
-    std::auto_ptr<TChain> runData_;
-    std::auto_ptr<TChain> runMetaData_;
+    TTree* fileMetaData_;  // Trees not owned
     BranchDescription::MatchMode matchMode_;
     bool skipMissing_;
 
@@ -353,10 +328,13 @@ namespace edm {
     std::map<ParameterSetID, ParameterSetBlob>       parameterSetBlobs_;
     std::map<ProcessHistoryID, ProcessHistory>       processHistories_;
     std::map<ModuleDescriptionID, ModuleDescription> moduleDescriptions_;
-
-    
-    // helpers
-    void merge_chains(TFile& outfile);
+    boost::shared_ptr<TFile> outFile_;
+    std::string outFileName_;
+    // FileID fid_;
+    std::string logicalOutFileName_;
+    std::string outCatalogName_;
+    std::vector<std::string> treeNames_;
+    std::vector<TTree *> trees_;
 
     // not implemented
     ProcessInputFile(ProcessInputFile const&);
@@ -366,18 +344,16 @@ namespace edm {
   ProcessInputFile::ProcessInputFile(
 	std::string const& catalogName,
 	BranchDescription::MatchMode matchMode,
-	bool skipMissing) :
+	bool skipMissing,
+	std::string const& outFileName,
+	std::string const& logicalOutFileName,
+	std::string const& outCatalogName) :
     catalogURL_(catalogName),
     report_(),
     inTokens_(),
-    firstFile_(),
+    outToken_(),
+    first_(true),
     fileMetaData_(),
-    eventData_(),
-    eventMetaData_(),
-    lumiData_(),
-    lumiMetaData_(),
-    runData_(),
-    runMetaData_(),
     matchMode_(matchMode),
     skipMissing_(skipMissing),
     firstPreg_(),
@@ -385,16 +361,26 @@ namespace edm {
     fileFormatVersion_(),
     parameterSetBlobs_(),
     processHistories_(),
-    moduleDescriptions_()
-  {}
-
-  ProcessInputFile::~ProcessInputFile() {
-
-    // I think we need to 'shut down' each tree that the TFile
-    // firstFile_ is controlling.
-    if (fileMetaData_) fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), 
-				    0);
+    moduleDescriptions_(),
+    outFile_(),
+    outFileName_(outFileName),
+//  fid_(createFileIdentifier()),
+    logicalOutFileName_(logicalOutFileName),
+    outCatalogName_(outCatalogName),
+    treeNames_(),
+    trees_(END, 0)
+  {
+    TTree::SetMaxTreeSize(kMaxLong64);
+    treeNames_.reserve(END);
+    treeNames_.push_back(BranchTypeToProductTreeName(InEvent));
+    treeNames_.push_back(BranchTypeToMetaDataTreeName(InEvent));
+    treeNames_.push_back(BranchTypeToProductTreeName(InLumi));
+    treeNames_.push_back(BranchTypeToMetaDataTreeName(InLumi));
+    treeNames_.push_back(BranchTypeToProductTreeName(InRun));
+    treeNames_.push_back(BranchTypeToMetaDataTreeName(InRun));
   }
+
+  ProcessInputFile::~ProcessInputFile() {}
   
 
   // This operator is called to process each file. The steps of
@@ -410,26 +396,27 @@ namespace edm {
   //         iv.  the ProcessHistoryMaps must be equal.
   //         v.   we ignore the ParameterSetMaps.
   // 
-  //   2. If the files are compatible, we record information about the
+  //   2. If the files are compatible, we:
   //      new file.
-  //      a. add the file name to the TChain for each tree we accumulate:
+  //      a. use the tree cloner for each tree
   //         i.   Event data
   //         ii.  Event meta data
   //         iii. lumi data
-  //         iv.  run data
-  //      b. deal with the POOL trees (???)
+  //         iv.  lumi meta data
+  //         v.   run data
+  //         vi.  run meta data
   //      c. update the objects stored from the MetaData tree
   //         i.  add any new ParameterSetBlobs to the ParameterSetMap
 
   void
-  ProcessInputFile::operator()(std::string const& fname, std::string const& logicalFileName) {
+  ProcessInputFile::operator()(FileCatalogItem const& item) {
+    std::string const& fname = item.fileName();
+    std::string const& logicalFileName = item.logicalFileName();
     std::auto_ptr<TFile> currentFile(openTFile(fname, logicalFileName, false, skipMissing_));
     if (currentFile.get() == 0) {
       report_->reportSkippedFile(fname, logicalFileName);
       return;
     }
-    bool first = (firstFile_.get() == 0);
-  
       // --------------------
       // Test MetaData trees
       // --------------------
@@ -437,14 +424,14 @@ namespace edm {
         getTTreeOrThrow(*currentFile, poolNames::metaDataTreeName());
 
     ProductRegistry currentProductRegistryBuffer;
-    ProductRegistry & currentProductRegistry = (first ? firstPreg_ : currentProductRegistryBuffer);
+    ProductRegistry & currentProductRegistry = (first_ ? firstPreg_ : currentProductRegistryBuffer);
     
     readFromBranch(currentFileMetaData, 
   		   poolNames::productDescriptionBranchName(),
   		   0, "ProductRegistry", fname, currentProductRegistry);    
 
     std::vector<std::string> currentBranchNamesBuffer;
-    std::vector<std::string> & currentBranchNames = (first ? branchNames_ : currentBranchNamesBuffer);
+    std::vector<std::string> & currentBranchNames = (first_ ? branchNames_ : currentBranchNamesBuffer);
     getBranchNamesFromRegistry(currentProductRegistry, currentBranchNames);
 
     // We delay any testing of compatibility until after we have
@@ -475,20 +462,11 @@ namespace edm {
   		   0, "FileFormatVersion", fname, currentFileFormatVersion);
 
 
-    if (first) {
-      fileMetaData_ = currentFileMetaData;
+    if (first_) {
       fileFormatVersion_ = currentFileFormatVersion;
       if (fileFormatVersion_.value_ < 1)
         throw cms::Exception("MismatchedInput")
     	  << "This version of FastMerge only supports file version 1 or greater\n";
-
-      TFile & curfile = *currentFile;
-      eventData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InEvent), curfile);
-      eventMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InEvent), curfile);
-      lumiData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InLumi), curfile);
-      lumiMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InLumi), curfile);
-      runData_ = makeTChainOrThrow(BranchTypeToProductTreeName(InRun), curfile);
-      runMetaData_ = makeTChainOrThrow(BranchTypeToMetaDataTreeName(InRun), curfile);
 
       checkStrictMergeCriteria(currentProductRegistry, getFileFormatVersion(), fname, matchMode_);
     } else {
@@ -511,7 +489,7 @@ namespace edm {
 
     std::map<ModuleDescriptionID, ModuleDescription> currentModuleDescriptionsBuffer;
     std::map<ModuleDescriptionID, ModuleDescription> & currentModuleDescriptions =
-        (first ? moduleDescriptions_ : currentModuleDescriptionsBuffer);
+        (first_ ? moduleDescriptions_ : currentModuleDescriptionsBuffer);
     readFromBranch(currentFileMetaData, 
   		   poolNames::moduleDescriptionMapBranchName(),
   		   0, "ModuleDescriptionMap", fname, 
@@ -519,7 +497,7 @@ namespace edm {
 
     std::map<ProcessHistoryID, ProcessHistory> currentProcessHistoriesBuffer;
     std::map<ProcessHistoryID, ProcessHistory> & currentProcessHistories =
-        (first ? processHistories_ : currentProcessHistoriesBuffer);
+        (first_ ? processHistories_ : currentProcessHistoriesBuffer);
     readFromBranch(currentFileMetaData, 
   		   poolNames::processHistoryMapBranchName(),
   		   0, "ProcessHistoryMap", fname, 
@@ -529,15 +507,13 @@ namespace edm {
     // private member function.
     std::map<ParameterSetID, ParameterSetBlob> currentParameterSetBlobsBuffer;
     std::map<ParameterSetID, ParameterSetBlob> & currentParameterSetBlobs =
-        (first ? parameterSetBlobs_ : currentParameterSetBlobsBuffer);
+        (first_ ? parameterSetBlobs_ : currentParameterSetBlobsBuffer);
     readFromBranch(currentFileMetaData, 
   		   poolNames::parameterSetMapBranchName(),
   		   0, "ParameterSetMap", fname, 
   		   currentParameterSetBlobs);
 
-    if (first) {
-      firstFile_ = currentFile;
-    } else {
+    if (!first_) {
       moduleDescriptions_.insert(currentModuleDescriptions.begin(), currentModuleDescriptions.end());
   
       processHistories_.insert(currentProcessHistories.begin(), currentProcessHistories.end());
@@ -562,125 +538,152 @@ namespace edm {
   	}
       } // end of block
     }    
-    int nEventsBefore = eventMetaData_->GetEntries();
-    if (runMetaData_.get() != 0) addFilenameToTChain(*runMetaData_, fname);
-    if (runData_.get() != 0) addFilenameToTChain(*runData_, fname);
-    if (lumiMetaData_.get() != 0) addFilenameToTChain(*lumiMetaData_, fname);
-    if (lumiData_.get() != 0) addFilenameToTChain(*lumiData_, fname);
-    if (eventMetaData_.get() != 0) addFilenameToTChain(*eventMetaData_, fname);
-    if (eventData_.get() != 0) addFilenameToTChain(*eventData_, fname);
 
-    int nEvents = eventMetaData_->GetEntries() - nEventsBefore;
 
-    // FIXME: This can report closure of the file even when
-    // closing fails.
-    report_->overrideEventsRead(inToken, nEvents);
+    TFile & curfile = *currentFile;
+    std::vector<TTree *> currentTrees;
+    currentTrees.reserve(END);
+    for (std::vector<std::string>::const_iterator it = treeNames_.begin(), itEnd = treeNames_.end();
+	it != itEnd; ++it) {
+      currentTrees.push_back(getTTree(curfile, it->c_str()));
+    }
+
+    if (first_) {
+      pool::Guid guid;
+      pool::Guid::create(guid);
+      std::string fid = guid.toString();
+      outFile_ = boost::shared_ptr<TFile>(openTFile(outFileName_, logicalOutFileName_, true).release());
+      // FIXME: This output file open/close should be managed by a sentry object.
+      outToken_ = report_->outputFileOpened(
+	  outFileName_,		// physical filename
+	  logicalOutFileName_,	// logical filename
+	  outCatalogName_,	// catalog
+	  "FastMerge",		// source class name
+	  "EdmFastMerge",	// module label
+	  fid,			// File ID (guid)
+	  branchNames_);
+    }
+
+    outFile_->cd();
+    for (int i = 0; i != END; ++i) {
+      TTree *in = currentTrees[i];
+      if (in != 0) {
+	if(!trees_[i]) {
+	  trees_[i] =  in->CloneTree(0); 
+	}
+	TTree *out = trees_[i];
+	TTreeCloner cloner(in, out, "");
+	if (!cloner.IsValid()) {
+	  throw 0;
+	}
+	out->SetEntries(out->GetEntries() + in->GetEntries());
+	cloner.Exec();
+      }
+    }
+    if (fileMetaData_ == 0) {
+	fileMetaData_ = currentFileMetaData->CloneTree(0);
+    }
+
+    // FIXME: This can report closure of the file even when closing fails.
+    report_->overrideEventsRead(inToken, currentTrees[EVENT]->GetEntries());
     report_->inputFileClosed(inToken);
+    curfile.Close();
+    first_ = false;
   }
 
   void
-  ProcessInputFile::merge(std::string const& outfilename,
-	       std::string const& logicalFileName,
-	       std::string const& catalogName,
-	       pool::FileCatalog::FileID const& fid) {
-    // We are careful to open the file just before calling
-    // merge_chains, because we must not allow alteration of ROOT's
-    // global 'most recent file opened' state between creation of the
-    // output TFile and use of that TFile by the TChain::Merge calls
-    // we make in merge_chains. Isn't it delicious?
-
-    std::auto_ptr<TFile> outFile(openTFile(outfilename, logicalFileName, true));
-
-    // FIXME: This output file open/close should be managed by a
-    // sentry object.
-    JobReport::Token outToken = 
-      report_->outputFileOpened(
-	outfilename,    // physical filename
-	logicalFileName,// logical filename
-	catalogName,    // catalog
-	"FastMerge",    // source class name
-	"EdmFastMerge", // module label
-	fid,		// File ID (guid)
-	branchNames_);
-
+  ProcessInputFile::finalize() {
+     if (fileMetaData_ == 0) {
+	throw cms::Exception("RootFailure")
+	  << "Unable to find or open any input files.\n"; 
+     }
 
     //----------
     // Write out file-level metadata
     //----------
-    TTree* newMeta   = fileMetaDataTree()->CloneTree(0);
+
+/*
+    FileID *fidp = &fid_;
+    if (fileMetaData_->GetBranch(poolNames::fileIdentifierBranchName().c_str())) {
+      fileMetaData_->SetBranchAddress(poolNames::fileIdentifierBranchName().c_str(), &fidp);
+    } else {
+      fileMetaData_->Branch(poolNames::fileIdentifierBranchName().c_str(), &fidp);
+    }
+*/
 
     FileFormatVersion *ffvp = &fileFormatVersion_;
-    newMeta->SetBranchAddress(poolNames::fileFormatVersionBranchName().c_str(), &ffvp);
+    fileMetaData_->SetBranchAddress(poolNames::fileFormatVersionBranchName().c_str(), &ffvp);
 
     std::map<ProcessHistoryID, ProcessHistory> *phmp = &processHistories_;
-    newMeta->SetBranchAddress(poolNames::processHistoryMapBranchName().c_str(), &phmp);
+    fileMetaData_->SetBranchAddress(poolNames::processHistoryMapBranchName().c_str(), &phmp);
 
     std::map<ModuleDescriptionID, ModuleDescription> *mdmp = &moduleDescriptions_;
-    newMeta->SetBranchAddress(poolNames::moduleDescriptionMapBranchName().c_str(), &mdmp);
+    fileMetaData_->SetBranchAddress(poolNames::moduleDescriptionMapBranchName().c_str(), &mdmp);
 
     ProductRegistry *pregp = &firstPreg_;
-    newMeta->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), &pregp);
+    fileMetaData_->SetBranchAddress(poolNames::productDescriptionBranchName().c_str(), &pregp);
 
     std::map<ParameterSetID, ParameterSetBlob> *psetp = &parameterSetBlobs_;
-    newMeta->SetBranchAddress(poolNames::parameterSetMapBranchName().c_str(), &psetp);
+    fileMetaData_->SetBranchAddress(poolNames::parameterSetMapBranchName().c_str(), &psetp);
 
-    newMeta->Fill();
-    newMeta->Write();
+    fileMetaData_->Fill();
+    fileMetaData_->Write();
 
-    //----------
-    // Merge the chains.
-    //----------
-    merge_chains(*outFile);
 
-    int nEvents = eventData_->GetEntries();
+    int nEvents = trees_[EVENT]->GetEntries();
 
-    TFile &f = *outFile;
+    TFile &f = *outFile_;
     TTree *tEvent = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InEvent).c_str()));
-    if (tEvent) {
-      tEvent->BuildIndex("id_.run_", "id_.event_");
+    if (tEvent && tEvent->GetBranch(BranchTypeToAuxiliaryBranchName(InEvent).c_str()) != 0) {
+      tEvent->BuildIndex(BranchTypeToMajorIndexName(InEvent).c_str(),
+	 	       BranchTypeToMinorIndexName(InEvent).c_str());
+     
     }
     TTree *tLumi = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InLumi).c_str()));
-    if (tLumi) {
-      tLumi->BuildIndex("id_.run_", "id_.luminosityBlock_");
+    if (tLumi && tLumi->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str()) != 0) {
+      tLumi->BuildIndex(BranchTypeToMajorIndexName(InLumi).c_str(),
+	 	       BranchTypeToMinorIndexName(InLumi).c_str());
     }
     TTree *tRun = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InRun).c_str()));
-    if (tRun) {
-      tRun->BuildIndex("id_.run_");
+    if (tRun && tRun->GetBranch(BranchTypeToAuxiliaryBranchName(InRun).c_str()) != 0) {
+      tRun->BuildIndex(BranchTypeToMajorIndexName(InRun).c_str());
     }
     f.Write();
     f.Purge();
 
-    TTree *lumitree = getTTreeOrThrow(f, BranchTypeToProductTreeName(InLumi));
-    TBranch* lumiAux = lumitree->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str());
-    if (!lumiAux) {
-      throw cms::Exception("RootFailure")
-        << "Unable to find the TBranch: "
-        << BranchTypeToAuxiliaryBranchName(InLumi)
-        << "\n in TTree: "
-        << BranchTypeToProductTreeName(InLumi)
-        << '\n';
+    if (tLumi != 0) {
+      TTree *treeLumi = dynamic_cast<TTree *>(f.Get(BranchTypeToProductTreeName(InLumi).c_str()));
+      TBranch* lumiAux = treeLumi->GetBranch(BranchTypeToAuxiliaryBranchName(InLumi).c_str());
+      if (lumiAux) {
+        LuminosityBlockAuxiliary lbAux;
+        LuminosityBlockAuxiliary *lbAuxPtr = &lbAux;
+        lumiAux->SetAddress(&lbAuxPtr);
+        int nLumis = lumiAux->GetEntries();
+        for (int i = 0; i != nLumis; ++i) {
+          lumiAux->GetEntry(i);
+          report_->reportLumiSection(lbAux.run(), lbAux.luminosityBlock());
+        }
+      } else {
+        if (fileFormatVersion_.value_ >= 3) {
+          throw cms::Exception("RootFailure")
+            << "Unable to find the TBranch: "
+            << BranchTypeToAuxiliaryBranchName(InLumi)
+            << "\n in TTree: "
+            << BranchTypeToProductTreeName(InLumi)
+            << '\n';
+        }
+      }
+    } else {
+      if (fileFormatVersion_.value_ >= 3) {
+        throw cms::Exception("RootFailure")
+          << "Unable to find the TTree: "
+          << BranchTypeToProductTreeName(InLumi)
+          << '\n';
+      }
     }
-    LuminosityBlockAuxiliary lbAux;
-    LuminosityBlockAuxiliary *lbAuxPtr = &lbAux;
-    lumiAux->SetAddress(&lbAuxPtr);
-    int nLumis = lumiAux->GetEntries();
-    for (int i = 0; i != nLumis; ++i) {
-      lumiAux->GetEntry(i);
-      report_->reportLumiSection(lbAux.run(), lbAux.luminosityBlock());
-    }
-    report_->overrideContributingInputs(outToken, inTokens_);
-    report_->overrideEventsWritten(outToken, nEvents);
-    report_->outputFileClosed(outToken);
-  }
-
-  void
-  ProcessInputFile::merge_chains(TFile& outfile) {
-    if (runMetaData_.get() != 0) mergeTChain(*runMetaData_, outfile);
-    if (runData_.get() != 0) mergeTChain(*runData_, outfile);
-    if (lumiMetaData_.get() != 0) mergeTChain(*lumiMetaData_, outfile);
-    if (lumiData_.get() != 0) mergeTChain(*lumiData_, outfile);
-    if (eventMetaData_.get() != 0) mergeTChain(*eventMetaData_, outfile);
-    if (eventData_.get() != 0) mergeTChain(*eventData_, outfile);
+    report_->overrideContributingInputs(outToken_, inTokens_);
+    report_->overrideEventsWritten(outToken_, nEvents);
+    report_->outputFileClosed(outToken_);
   }
 
   void
@@ -707,32 +710,22 @@ namespace edm {
     // often, but that's part of the problem with global state!
     gErrorIgnoreLevel = kError;
 
-    std::vector<std::string> branchNames;
-
     BranchDescription::MatchMode matchMode = (beStrict ? BranchDescription::Strict : BranchDescription::Permissive);
 
     ParameterSet pset;
     pset.addUntrackedParameter<std::vector<std::string> >("fileNames", filesIn);
     pset.addUntrackedParameter<std::string>("catalog", catalogIn);
     InputFileCatalog catalog(pset, skipMissing);
-    ParameterSet opset;
-    opset.addUntrackedParameter<std::string>("fileName", fileOut);
-    opset.addUntrackedParameter<std::string>("logicalFileName", lfnOut);
-    opset.addUntrackedParameter<std::string>("catalog", catalogOut);
-    OutputFileCatalog outputCatalog(opset);
-    pool::FileCatalog::FileID fid = outputCatalog.registerFile(fileOut, lfnOut);
 
     std::vector<FileCatalogItem> const& inputFiles = catalog.fileCatalogItems();
 
     typedef std::vector<FileCatalogItem>::const_iterator iter;
-    ProcessInputFile proc(catalog.url(), matchMode, skipMissing);
+    ProcessInputFile proc(catalog.url(), matchMode, skipMissing, fileOut, lfnOut, catalogOut);
 
-    // We don't use for_each, because we don't want our functor to be
-    // copied.
-    for (iter i=inputFiles.begin(), e=inputFiles.end(); i != e; ++i) proc(i->fileName(), i->logicalFileName());
-    proc.merge(fileOut, lfnOut, outputCatalog.url(), fid);
-
-    outputCatalog.commitCatalog();
+    // We don't use for_each, because we don't want our functor to be copied.
+    // for_all(inputFiles, proc).merge(fileOut, lfnOut, catalogOut);
+    for (iter i=inputFiles.begin(), e=inputFiles.end(); i != e; ++i) proc(*i);
+    proc.finalize();
   }
 
 }
