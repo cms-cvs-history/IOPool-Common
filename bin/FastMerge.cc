@@ -75,7 +75,7 @@ namespace edm {
             << "before the file name in your configuration file.\n";
         }
 	throw cms::Exception("RootFailure")
-	  << "Unable to open file: " 
+	  << "Unable to find file or unable to open file: " 
 	  << filename
 	  << '\n';
       }
@@ -576,6 +576,11 @@ namespace edm {
 
   void
   ProcessInputFile::finalize() {
+     if (fileMetaData_ == 0) {
+	throw cms::Exception("RootFailure")
+	  << "Unable to find or open any input files.\n"; 
+     }
+
     //----------
     // Write out file-level metadata
     //----------
