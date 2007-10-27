@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.16 2007/05/21 21:31:05 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.17 2007/07/25 22:50:58 wmtan Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -16,12 +16,14 @@ $Id: EdmFastMerge.cpp,v 1.16 2007/05/21 21:31:05 wmtan Exp $
 #include <boost/program_options.hpp>
 #include "IOPool/Common/bin/FastMerge.h"
 #include "Cintex/Cintex.h"
+#include "SealBase/Error.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/PluginManager/interface/ProblemTracker.h"
 #include "FWCore/Utilities/interface/Presence.h"
 #include "FWCore/PluginManager/interface/PresenceFactory.h"
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 #include "FWCore/MessageLogger/interface/MessageLoggerQ.h"
+#include "FWCore/MessageLogger/interface/JobReport.h"
 
 using namespace boost::program_options;
 
@@ -104,7 +106,7 @@ int main(int argc, char* argv[]) {
     boost::shared_ptr<edm::Presence> theMessageServicePresence;
     theMessageServicePresence = boost::shared_ptr<edm::Presence>(edm::PresenceFactory::get()->
       makePresence("MessageServicePresence").release());
-
+        
     std::string config =
       "process EdmFastMerge = {"
 	"service = MessageLogger {"
@@ -119,22 +121,12 @@ int main(int argc, char* argv[]) {
 	    "untracked PSet default = {untracked int32 limit = 10000000}"
 	  "}";
 
-    if (vm.count("jobreport")) {
-      config += " untracked vstring fwkJobReports = {'";
-      config += vm["jobreport"].as<std::string>(); 
-      config += "'}";
-      edm::MessageLoggerQ::MLqJOB(new std::string(vm["jobreport"].as<std::string>()));
-
-    }
-
     config +=
 	  "untracked vstring categories = {'FwkJob'}"
 	  "untracked PSet FrameworkJobReport = {"
 	    "untracked PSet default = {untracked int32 limit = 0}";
 
-    config += (vm.count("jobreport") ?
-	    "untracked PSet FwkJob = {untracked int32 limit = 10000000}" :
-	    "untracked PSet FwkJob = {untracked int32 limit = 0}");
+    config +="untracked PSet FwkJob = {untracked int32 limit = 0}";
 
     config +=
 	  "}"
@@ -147,8 +139,26 @@ int main(int argc, char* argv[]) {
     //create the services
     edm::ServiceToken tempToken = edm::ServiceRegistry::createServicesFromConfig(config);
 
+    //
+    // Decide whether to enable creation of job report xml file 
+    //  We do this first so any errors will be reported
+    // 
+    std::auto_ptr<std::ofstream> jobReportStreamPtr;
+    if (vm.count("jobreport")) {
+      std::string jobReportFile = vm["jobreport"].as<std::string>();
+      jobReportStreamPtr = std::auto_ptr<std::ofstream>( new std::ofstream(jobReportFile.c_str()) );
+    } 
+    //
+    // Make JobReport Service up front
+    // 
+    //NOTE: JobReport must have a lifetime shorter than jobReportStreamPtr so that when the JobReport destructor
+    // is called jobReportStreamPtr is still valid
+    std::auto_ptr<edm::JobReport> jobRepPtr(new edm::JobReport(jobReportStreamPtr.get()));  
+    edm::ServiceToken fullToken = 
+      edm::ServiceRegistry::createContaining(jobRepPtr,tempToken,edm::serviceregistry::kOverlapIsError);
+    
     //make the services available
-    edm::ServiceRegistry::Operate operate(tempToken);
+    edm::ServiceRegistry::Operate operate(fullToken);
 
     edm::FastMerge(in, out, catalog, outputCatalog, lfn, beStrict, skipMissing);
   }
