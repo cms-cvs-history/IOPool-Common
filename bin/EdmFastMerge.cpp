@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.17 2007/07/25 22:50:58 wmtan Exp $
+$Id: EdmFastMerge.cpp,v 1.18 2007/10/27 21:50:51 chrjones Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -24,6 +24,7 @@ $Id: EdmFastMerge.cpp,v 1.17 2007/07/25 22:50:58 wmtan Exp $
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
 #include "FWCore/MessageLogger/interface/MessageLoggerQ.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 using namespace boost::program_options;
 
