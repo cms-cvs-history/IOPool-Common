@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.18 2007/10/27 21:50:51 chrjones Exp $
+$Id: EdmFastMerge.cpp,v 1.19 2007/10/28 05:13:19 lsexton Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
     config +=
 	  "}"
 	"}"
-	"service = JobReportService{}"
+	//"service = JobReportService{}"
 	"service = SiteLocalConfigService{}"
 	"service = AdaptorConfig{}"
       "}";
