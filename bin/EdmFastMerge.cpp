@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.19 2007/10/28 05:13:19 lsexton Exp $
+$Id: EdmFastMerge.cpp,v 1.20 2007/11/01 15:20:51 chrjones Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -22,9 +22,12 @@ $Id: EdmFastMerge.cpp,v 1.19 2007/10/28 05:13:19 lsexton Exp $
 #include "FWCore/Utilities/interface/Presence.h"
 #include "FWCore/PluginManager/interface/PresenceFactory.h"
 #include "FWCore/ServiceRegistry/interface/ServiceRegistry.h"
+#include "FWCore/ServiceRegistry/interface/ServiceWrapper.h"
 #include "FWCore/MessageLogger/interface/MessageLoggerQ.h"
 #include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/MessageLogger/interface/ExceptionMessages.h"
+#include "FWCore/Utilities/interface/Exception.h"
 
 using namespace boost::program_options;
 
@@ -155,13 +158,26 @@ int main(int argc, char* argv[]) {
     //NOTE: JobReport must have a lifetime shorter than jobReportStreamPtr so that when the JobReport destructor
     // is called jobReportStreamPtr is still valid
     std::auto_ptr<edm::JobReport> jobRepPtr(new edm::JobReport(jobReportStreamPtr.get()));  
+    boost::shared_ptr<edm::serviceregistry::ServiceWrapper<edm::JobReport> > 
+      jobRep(new edm::serviceregistry::ServiceWrapper<edm::JobReport>(jobRepPtr) );
     edm::ServiceToken fullToken = 
-      edm::ServiceRegistry::createContaining(jobRepPtr,tempToken,edm::serviceregistry::kOverlapIsError);
+      edm::ServiceRegistry::createContaining(jobRep,tempToken,edm::serviceregistry::kOverlapIsError);
     
     //make the services available
     edm::ServiceRegistry::Operate operate(fullToken);
 
-    edm::FastMerge(in, out, catalog, outputCatalog, lfn, beStrict, skipMissing);
+    try {
+      edm::FastMerge(in, out, catalog, outputCatalog, lfn, beStrict, skipMissing);
+    } catch(cms::Exception& e) {
+      rc = 1;
+      edm::printCmsException(e,"edmFastMerge",&(jobRep.get()->get()),rc);
+    } catch(std::exception& e) {
+      rc = 1;
+      edm::printStdException(e,"edmFastMerge",&(jobRep.get()->get()),rc);
+    } catch(...) {
+      rc=2;
+      edm::printUnknownException("edmFastMerge",&(jobRep.get()->get()),rc);
+    }
   }
   catch (cms::Exception& e) {
     std::cout << "cms::Exception caught in "
