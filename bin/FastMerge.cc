@@ -554,11 +554,14 @@ namespace edm {
       if (in != 0) {
 	if(!trees_[i]) {
 	  trees_[i] =  in->CloneTree(0); 
+	  in->GetListOfClones()->Remove(trees_[i]);
+	  trees_[i]->ResetBranchAddresses();
 	}
 	TTree *out = trees_[i];
 	TTreeCloner cloner(in, out, "");
 	if (!cloner.IsValid()) {
-	  throw 0;
+          throw edm::Exception(edm::errors::FatalRootError)
+            << "invalid TTreeCloner\n";
 	}
 	out->SetEntries(out->GetEntries() + in->GetEntries());
 	cloner.Exec();
@@ -566,6 +569,8 @@ namespace edm {
     }
     if (fileMetaData_ == 0) {
 	fileMetaData_ = currentFileMetaData->CloneTree(0);
+	currentFileMetaData->GetListOfClones()->Remove(fileMetaData_);
+	fileMetaData_->ResetBranchAddresses();
     }
 
     // FIXME: This can report closure of the file even when closing fails.
