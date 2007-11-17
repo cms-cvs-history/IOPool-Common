@@ -4,7 +4,7 @@ This is a generic main that can be used with any plugin and a
 PSet script.   See notes in EventProcessor.cpp for details about
 it.
 
-$Id: EdmFastMerge.cpp,v 1.20 2007/11/01 15:20:51 chrjones Exp $
+$Id: EdmFastMerge.cpp,v 1.21 2007/11/01 17:16:13 chrjones Exp $
 
 ----------------------------------------------------------------------*/  
 
@@ -16,7 +16,6 @@ $Id: EdmFastMerge.cpp,v 1.20 2007/11/01 15:20:51 chrjones Exp $
 #include <boost/program_options.hpp>
 #include "IOPool/Common/bin/FastMerge.h"
 #include "Cintex/Cintex.h"
-#include "SealBase/Error.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "FWCore/PluginManager/interface/ProblemTracker.h"
 #include "FWCore/Utilities/interface/Presence.h"
