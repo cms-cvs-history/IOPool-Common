@@ -1,31 +1,9 @@
-<bin name=EdmProvDump file=EdmProvDump.cc,>
- <use name=rootcore>
- <use name=rootcintex>
- <use name=DataFormats/Provenance>
- <use name=FWCore/ParameterSet>
- <use name=FWCore/Utilities>
- <use name=uuid>
-</bin>
-
 <bin name=edmProvDump file=EdmProvDump.cc,>
  <use name=rootcore>
  <use name=rootcintex>
  <use name=DataFormats/Provenance>
  <use name=FWCore/ParameterSet>
  <use name=FWCore/Utilities>
- <use name=uuid>
-</bin>
-
-<bin name=EdmFileUtil file=EdmFileUtil.cpp,CollUtil.cc>
- <use name=boost>
- <use name=boost_program_options>
- <use name=rootcore>
- <use name=DataFormats/Provenance>
- <use name=FWCore/Catalog>
- <use name=FWCore/ParameterSet>
- <use name=FWCore/PluginManager>
- <use name=FWCore/RootAutoLibraryLoader>
- <use name=FWCore/ServiceRegistry>
  <use name=uuid>
 </bin>
 
