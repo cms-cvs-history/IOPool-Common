@@ -11,6 +11,7 @@
  <use name=boost>
  <use name=boost_program_options>
  <use name=rootcore>
+ <use name=roothistmatrix>
  <use name=DataFormats/Provenance>
  <use name=FWCore/Catalog>
  <use name=FWCore/ParameterSet>
