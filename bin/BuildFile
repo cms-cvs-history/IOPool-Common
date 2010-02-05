@@ -16,7 +16,6 @@
  <use name=FWCore/Catalog>
  <use name=FWCore/ParameterSet>
  <use name=FWCore/PluginManager>
- <use name=FWCore/RootAutoLibraryLoader>
  <use name=FWCore/ServiceRegistry>
  <use name=uuid>
 </bin>
