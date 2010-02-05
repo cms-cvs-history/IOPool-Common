@@ -1,8 +1,9 @@
 <bin name=edmProvDump file=EdmProvDump.cc,>
  <use name=rootcore>
- <use name=rootcintex>
  <use name=DataFormats/Provenance>
  <use name=FWCore/ParameterSet>
+ <use name=FWCore/PluginManager>
+ <use name=FWCore/ServiceRegistry>
  <use name=FWCore/Utilities>
  <use name=uuid>
 </bin>
